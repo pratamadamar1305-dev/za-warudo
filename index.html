@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Meta Hero MLBB — Season 42 Patch 2.2.16a (semua lane)</title>
+<style>
+  :root{
+    --bg:#080a12;
+    --bg-soft:#0e1220;
+    --card:#111629;
+    --card-2:#161c33;
+    --line:#232a45;
+    --txt:#e8ecf8;
+    --muted:#8d97b8;
+    --gold:#f5c451;
+    --splus:#ff5a5f;
+    --s:#b478ff;
+    --a:#4fc3ff;
+    --b:#7d88a8;
+    --c:#4d5670;
+    --green:#35d69a;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;
+    font-family:"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    background:
+      radial-gradient(1100px 600px at 12% -10%, rgba(180,120,255,.16), transparent 60%),
+      radial-gradient(900px 500px at 92% 0%, rgba(79,195,255,.13), transparent 55%),
+      var(--bg);
+    color:var(--txt);
+    -webkit-font-smoothing:antialiased;
+  }
+  a{color:var(--gold);text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px 80px}
+
+  /* ---------- header ---------- */
+  header{padding:44px 0 26px}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--gold);border:1px solid rgba(245,196,81,.35);
+    background:rgba(245,196,81,.07);padding:6px 12px;border-radius:999px;
+    font-weight:700;
+  }
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 10px var(--green)}
+  h1{
+    font-size:clamp(30px,5.2vw,52px);line-height:1.05;margin:18px 0 12px;
+    letter-spacing:-.02em;font-weight:800;
+  }
+  h1 span{
+    background:linear-gradient(100deg,var(--gold),#ff8f6b 55%,var(--s));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .lede{color:var(--muted);max-width:760px;line-height:1.65;font-size:15.5px;margin:0}
+  .meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  .pill{
+    font-size:12.5px;color:#c3cbe4;background:var(--card);
+    border:1px solid var(--line);border-radius:999px;padding:7px 13px;
+  }
+  .pill b{color:var(--txt)}
+
+  /* ---------- nav ---------- */
+  nav{
+    position:sticky;top:0;z-index:20;margin:26px 0 34px;
+    background:rgba(8,10,18,.82);backdrop-filter:blur(14px);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  }
+  .nav-in{
+    max-width:1180px;margin:0 auto;padding:11px 20px;
+    display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;
+  }
+  .nav-in::-webkit-scrollbar{display:none}
+  .nav-in a{
+    flex:0 0 auto;font-size:13px;font-weight:700;color:#aeb8d4;
+    border:1px solid var(--line);background:var(--card);
+    padding:8px 14px;border-radius:999px;white-space:nowrap;
+    transition:.18s;
+  }
+  .nav-in a:hover{color:#fff;border-color:#3b4670;background:var(--card-2);transform:translateY(-1px)}
+
+  /* ---------- section ---------- */
+  section{margin-bottom:56px;scroll-margin-top:74px}
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  h2{font-size:26px;margin:0;letter-spacing:-.01em;display:flex;align-items:center;gap:11px}
+  h2 .n{
+    font-size:12px;color:var(--gold);border:1px solid rgba(245,196,81,.4);
+    padding:3px 8px;border-radius:6px;font-weight:800;letter-spacing:.08em;
+  }
+  .sub{color:var(--muted);font-size:13.5px;margin:8px 0 20px;line-height:1.6}
+  .sub b{color:#cfd7ee}
+
+  /* ---------- hero grid ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:14px}
+  .hero{
+    position:relative;background:linear-gradient(165deg,var(--card-2),var(--card));
+    border:1px solid var(--line);border-radius:14px;padding:15px 16px 14px;
+    transition:.18s;overflow:hidden;
+  }
+  .hero:hover{transform:translateY(-3px);border-color:#3a4570;box-shadow:0 14px 30px rgba(0,0,0,.45)}
+  .hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+  .top{display:flex;align-items:center;gap:11px}
+  .av{
+    width:38px;height:38px;flex:0 0 38px;border-radius:11px;
+    display:grid;place-items:center;font-weight:800;font-size:13px;color:#0b0d16;
+    background:linear-gradient(150deg,var(--accent),#ffffffcc);
+    letter-spacing:.02em;
+  }
+  .hname{font-weight:700;font-size:15.5px;line-height:1.2}
+  .lane-tag{display:block;font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:.03em}
+  .tier{
+    margin-left:auto;font-size:11px;font-weight:800;letter-spacing:.06em;
+    padding:4px 8px;border-radius:7px;border:1px solid var(--accent);color:var(--accent);
+    background:rgba(255,255,255,.03);
+  }
+  .stats{display:flex;gap:14px;margin:13px 0 0;align-items:baseline}
+  .stat{font-size:11px;color:var(--muted);letter-spacing:.02em}
+  .stat b{display:block;font-size:16px;color:var(--txt);letter-spacing:-.01em;margin-top:1px}
+  .stat b.win{color:var(--green)}
+  .note{margin:11px 0 0;font-size:12.5px;line-height:1.55;color:#a9b3d1}
+  .stars{display:inline-flex;gap:3px;margin-top:10px}
+  .stars i{width:5px;height:14px;border-radius:2px;background:#2a3252;display:block}
+  .stars i.on{background:var(--accent)}
+  .badge-row{display:flex;align-items:center;gap:10px;margin-top:10px}
+  .flag{
+    margin-left:auto;font-size:9.5px;font-weight:800;letter-spacing:.08em;
+    background:var(--accent);color:#0a0c14;padding:3px 8px;border-radius:6px;
+  }
+
+  /* tiers */
+  .t-splus{--accent:var(--splus)}
+  .t-s{--accent:var(--s)}
+  .t-a{--accent:var(--a)}
+  .t-b{--accent:var(--b)}
+  .t-c{--accent:var(--c)}
+
+  /* ---------- tables ---------- */
+  .cardish{
+    background:linear-gradient(180deg,var(--card-2),var(--card));
+    border:1px solid var(--line);border-radius:16px;padding:18px 18px 6px;overflow-x:auto;
+  }
+  table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:560px}
+  th{
+    text-align:left;color:var(--muted);font-size:11px;letter-spacing:.1em;
+    text-transform:uppercase;font-weight:800;padding:0 10px 10px;border-bottom:1px solid var(--line);
+  }
+  td{padding:11px 10px;border-bottom:1px solid rgba(35,42,69,.7);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td:first-child{font-weight:700;white-space:nowrap}
+  .barchart{margin:4px 0 14px}
+  .bar-row{display:grid;grid-template-columns:132px 1fr 58px;gap:12px;align-items:center;padding:5px 0}
+  .bar-row .nm{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .track{height:9px;border-radius:99px;background:#1b2138;overflow:hidden}
+  .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#ff5a5f,#ffb26b)}
+  .bar-row .vl{text-align:right;font-size:12.5px;color:#cfd7ee;font-variant-numeric:tabular-nums}
+  .bar-row.low{grid-template-columns:150px 1fr 132px}
+  .bar-row.low .fill{background:linear-gradient(90deg,#35d69a,#4fc3ff)}
+
+  /* ---------- callouts ---------- */
+  .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+  .callout{
+    background:linear-gradient(170deg,rgba(22,28,51,.95),rgba(14,18,32,.95));
+    border:1px solid var(--line);border-radius:14px;padding:16px 18px;
+  }
+  .callout h3{margin:0 0 10px;font-size:14px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+  .callout ul{margin:0;padding-left:18px;color:#aeb8d4;font-size:13px;line-height:1.75}
+  .callout li b{color:var(--txt)}
+  .tag-good{color:var(--green);font-weight:700}
+  .tag-bad{color:var(--splus);font-weight:700}
+
+  /* search */
+  .search-wrap{display:flex;gap:10px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
+  input[type=search]{
+    flex:1 1 260px;min-width:220px;background:var(--card);border:1px solid var(--line);
+    color:var(--txt);border-radius:10px;padding:11px 14px;font-size:14px;outline:none;
+  }
+  input[type=search]:focus{border-color:#3e4a78;box-shadow:0 0 0 3px rgba(79,195,255,.12)}
+  .hint{font-size:12px;color:var(--muted)}
+
+  footer{
+    border-top:1px solid var(--line);margin-top:20px;padding-top:22px;
+    color:var(--muted);font-size:12.5px;line-height:1.8;
+  }
+  footer b{color:#c3cbe4}
+  .nores{display:none;color:var(--muted);font-size:14px;padding:26px 0}
+  @media (max-width:600px){
+    .bar-row{grid-template-columns:104px 1fr 52px;gap:9px}
+    .stats{gap:11px}
+    h1{margin-top:14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="eyebrow"><span class="dot"></span>Live meta · Season 42 "Starward Decade"</span>
+    <h1>Hero meta Mobile Legends<br><span>untuk semua lane</span></h1>
+    <p class="lede">
+      Rekap hero paling kuat di tiap lane berdasarkan <b>win rate, ban rate, dan pick rate</b> 7 hari terakhir
+      ranked (all ranks). Patch aktif <b>2.2.16a</b> — data 9–11 November 2026. Ada juga daftar ban prioritas,
+      sleeper pick yang hampir nggak pernah diban, dan hero yang mending dihindari.
+    </p>
+    <div class="meta-row">
+      <span class="pill">Patch <b>2.2.16a</b></span>
+      <span class="pill">Season <b>42</b></span>
+      <span class="pill">133 hero</span>
+      <span class="pill">Update <b>11 Nov 2026</b></span>
+      <span class="pill">Sumber: <b>mlbbdex · mlbbhub</b></span>
+    </div>
+  </header>
+
+  <nav>
+    <div class="nav-in">
+      <a href="#cheatsheet">⚡ Cheat sheet</a>
+      <a href="#exp">EXP Lane</a>
+      <a href="#jungle">Jungle</a>
+      <a href="#mid">Mid Lane</a>
+      <a href="#gold">Gold Lane</a>
+      <a href="#roam">Roam</a>
+      <a href="#ban">Ban prioritas</a>
+      <a href="#hidden">Sleeper pick</a>
+      <a href="#avoid">Hindari</a>
+    </div>
+  </nav>
+
+  <!-- ================= CHEAT SHEET ================= -->
+  <section id="cheatsheet">
+    <div class="sec-head">
+      <h2><span class="n">00</span> Cheat sheet draft</h2>
+    </div>
+    <p class="sub">Kalau cuma mau satu tabel: ini pick terbaik, alternatif aman, dan siapa yang wajib di-ban per lane (patch 2.2.16a).</p>
+    <div class="cardish">
+      <table>
+        <thead>
+          <tr>
+            <th>Lane</th>
+            <th>Pick terbaik</th>
+            <th>Alternatif kuat</th>
+            <th>Free pick (jarang diban)</th>
+            <th>Wajib di-ban</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>EXP</td>
+            <td>Masha <span class="hint">(61.5% WR)</span></td>
+            <td>Argus, Sun, Aulus, Lukas, Gloo</td>
+            <td>Argus <span class="hint">(1.0% ban)</span></td>
+            <td>Masha, Gloo, Sun, Lukas</td>
+          </tr>
+          <tr>
+            <td>Jungle</td>
+            <td>Hirara <span class="hint">(67.5% ban)</span></td>
+            <td>Sun, Aulus, Lukas, Saber</td>
+            <td>Popol &amp; Kupa <span class="hint">(54.2% WR, 0.4% ban)</span></td>
+            <td>Hirara, Sun, Lukas, Aulus</td>
+          </tr>
+          <tr>
+            <td>Mid</td>
+            <td>Valir <span class="hint">(54.4% WR)</span></td>
+            <td>Gord, Zhask, Yve, Cyclops, Kadita</td>
+            <td>Gord <span class="hint">(0.5% ban)</span></td>
+            <td>Eudora, Valir</td>
+          </tr>
+          <tr>
+            <td>Gold</td>
+            <td>Obsidia <span class="hint">(53.2% WR, 50.5% ban)</span></td>
+            <td>Bruno, Popol &amp; Kupa, Hanabi</td>
+            <td>Bruno <span class="hint">(0.3% ban)</span></td>
+            <td>Obsidia</td>
+          </tr>
+          <tr>
+            <td>Roam</td>
+            <td>Estes / Gloo / Belerick</td>
+            <td>Rafaela, Floryn, Marcel, Carmilla, Minotaur</td>
+            <td>Khufra <span class="hint">(54.6% WR, 2.0% ban)</span></td>
+            <td>Belerick, Estes, Gloo, Marcel, Eudora</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="cols" style="margin-top:14px">
+      <div class="callout">
+        <h3>🧠 Pola meta sekarang</h3>
+        <ul>
+          <li><b>Sustain roam menang banyak game.</b> 6 dari 14 hero S-tier adalah roamer murni (Marcel, Rafaela, Khufra, Floryn, Minotaur, Carmilla) + Gloo yang flex.</li>
+          <li><b>Patch 2.2.16 buff jungler &amp; EXP</b>: Argus, Aulus, Lukas, Aldous, Alpha, Cici, Karina naik; Marcel, Melissa, Miya dipotong.</li>
+          <li><b>Anti-heal wajib</b> selama Estes, Floryn, Rafaela, dan Carmilla masih di atas.</li>
+          <li><b>Ban rate ≠ win rate.</b> Hirara diban 67.5% tapi WR cuma 50.0% — bannya "mahal" karena takut, bukan karena statistiknya gila.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>🎯 Urutan prioritas draft</h3>
+        <ul>
+          <li><b>First pick aman:</b> Valir, Khufra, Minotaur, Bruno, Gord — ban rate rendah, tersedia hampir tiap game.</li>
+          <li><b>Kalau kebuka:</b> Obsidia, Masha, Gloo, Estes, Marcel — langsung ambil.</li>
+          <li><b>Jangan buang ban</b> untuk hero &lt;3% ban kalau masih ada Obsidia / Belerick / Estes bebas.</li>
+          <li><b>Gold lane tipis.</b> Cuma Obsidia yang S-tier murni di gold — siapkan 2–3 marksman cadangan.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LANES (rendered by JS) ================= -->
+  <div id="lanes"></div>
+
+  <!-- ================= BAN PRIORITY ================= -->
+  <section id="ban">
+    <div class="sec-head"><h2><span class="n">08</span> Ban prioritas</h2></div>
+    <p class="sub">Ban rate tertinggi di semua rank. Hero dengan ban &gt;40% biasanya cuma kebuka 1 dari 2–3 game, jadi siapkan counter-nya.</p>
+    <div class="cardish barchart" id="banChart"></div>
+  </section>
+
+  <!-- ================= SLEEPERS ================= -->
+  <section id="hidden">
+    <div class="sec-head"><h2><span class="n">09</span> Sleeper pick — WR tinggi, hampir nggak diban</h2></div>
+    <p class="sub">Ini hero yang paling enak buat climbing solo queue: statistiknya bagus tapi tim lawan jarang menghabiskan slot ban untuknya.</p>
+    <div class="cardish barchart" id="sleeperChart"></div>
+    <div class="cols" style="margin-top:14px">
+      <div class="callout">
+        <h3>💎 Rekomendasi buat solo rank</h3>
+        <ul>
+          <li><b>Argus</b> — 56.5% WR, cuma 1% ban. Pick EXP paling "gratis" di patch ini.</li>
+          <li><b>Popol &amp; Kupa</b> — 54.2% WR, 0.4% ban, bisa jungle atau gold.</li>
+          <li><b>Khufra</b> — 54.6% WR, 2.0% ban, jawaban struktural buat semua hero mobile.</li>
+          <li><b>Minotaur</b> — 53.6% WR, 7.9% ban. Roamer paling "selalu ada".</li>
+          <li><b>Bruno</b> — 53.5% WR, 0.3% ban. Marksman dengan damage konsisten.</li>
+          <li><b>Gord</b> — 52.7% WR, 0.5% ban. Poke aman dari jarak jauh.</li>
+        </ul>
+      </div>
+      <div class="callout">
+        <h3>⚠️ Ban trap</h3>
+        <ul>
+          <li><b>Hirara</b> — ban 67.5% tapi WR 50.0%. Kuat karena tekanan awal, bukan karena menang otomatis.</li>
+          <li><b>Belerick</b> — ban 57.7% (tertinggi di game), WR 51.8%. Dipotong Lesley &amp; Beatrix.</li>
+          <li><b>Eudora</b> — ban 47.6%, WR 50.5%. Menang di game pendek, turun di game panjang.</li>
+          <li><b>Kaja</b> — ban 13.7% tapi WR 49.6%: diban karena takut, bukan karena statistik.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= AVOID ================= -->
+  <section id="avoid">
+    <div class="sec-head"><h2><span class="n">10</span> Mending dihindari</h2></div>
+    <p class="sub">Win rate di bawah 49% di patch 2.2.16a. Bukan berarti nggak bisa menang — cuma butuh usaha ekstra dibanding pick lain.</p>
+    <div class="cardish">
+      <table>
+        <thead><tr><th>Hero</th><th>Lane</th><th>Win rate</th><th>Catatan</th></tr></thead>
+        <tbody>
+          <tr><td>Granger</td><td>Gold</td><td>43.4%</td><td>Peak early bagus, tapi kalah scaling dari marksman crit.</td></tr>
+          <tr><td>Fanny</td><td>Jungle</td><td>±43–44%</td><td>Butuh mekanik tinggi, hasilnya nggak sebanding.</td></tr>
+          <tr><td>Lancelot</td><td>Jungle</td><td>±43–44%</td><td>Kalah tempo dari jungler fighter.</td></tr>
+          <tr><td>Harith</td><td>Gold / Mid</td><td>46.4%</td><td>Damage magic di gold bikin tim kurang damage fisik.</td></tr>
+          <tr><td>Chou</td><td>EXP</td><td>±45%</td><td>Utility bagus, tapi duel lane kalah terus.</td></tr>
+          <tr><td>Valentina</td><td>Mid</td><td>±45%</td><td>Bergantung ult lawan, lambat clear.</td></tr>
+          <tr><td>Pharsa</td><td>Mid</td><td>47.3%</td><td>Dihukum keras oleh banyaknya assassin jungle.</td></tr>
+          <tr><td>Zilong</td><td>EXP</td><td>±46%</td><td>Split push nggak cukup di meta teamfight sekarang.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <b>Cara baca data.</b> Tier di halaman ini pakai rumus <b>win rate + ¼ ban rate</b> (mlbbdex, all ranks, patch 2.2.16, snapshot 9 Nov 2026),
+    dilengkapi ban/pick rate dari mlbbhub (snapshot 11 Nov 2026, patch 2.2.16a). Hero bertanda sampel kecil
+    (pick rate &lt;0.3%) angka win rate-nya rapuh — jangan dijadikan patokan tunggal.<br>
+    <b>Catatan:</b> tier list mengukur seberapa "forgiving"/aman sebuah hero, bukan batas kemampuan maksimalnya.
+    Hero C-tier yang kamu kuasai tetap lebih baik daripada S+ yang baru kamu coba kemarin. Cek juga counter pick sebelum lock.
+    <br><br>
+    <b>Sumber:</b> mlbbdex.com (lane tier list), mlbbhub.com (tier list &amp; statistik ranked), catatan patch 2.2.16 / 2.2.16a.
+    Data per 11 November 2026 — angka bisa bergeser tiap patch.
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   DATA — patch 2.2.16a, snapshot 9–11 Nov 2026
+   wr = win rate %, ban/pick = % (all ranks, 7 hari terakhir)
+   flex = lane lain yang bisa dipakai
+   ============================================================ */
+const lanes = [
+  {
+    id:"exp", no:"01", name:"EXP Lane",
+    sub:"Meta EXP sekarang soal <b>durabilitas + sustain</b>. Masha (revamp) dan Argus jadi raja lane, sementara Gloo/Sun/Lukas/Aulus hampir selalu hilang di fase ban.",
+    heroes:[
+      {n:"Masha", t:"S+", wr:61.5, ban:42.8, pick:0.6, note:"Revamp: dari split-pusher jadi brawler teamfight. WR tertinggi di game, tapi sampel pick-nya kecil."},
+      {n:"Argus", t:"S+", wr:56.5, ban:1.0, pick:0.6, note:"Buff 2.2.16: pasif dapat 30% crit, ult makin sakit saat HP tipis. Ban cuma 1% — pick paling gratis.", flag:"FREE PICK"},
+      {n:"Gloo", t:"S+", wr:54.4, ban:43.4, pick:0.8, note:"Diban hampir tiap 2 game. Nempel ke target, share damage, susah dibunuh."},
+      {n:"Sun", t:"S+", wr:53.7, ban:36.4, pick:1.8, note:"Hero endgame: di bawah rata-rata sebelum menit 14, jauh di atas setelah menit 16."},
+      {n:"Aulus", t:"S+", wr:53.7, ban:31.7, pick:0.8, note:"Buff: enhanced basic attack jalan dari skill hit apa pun, skill 2 jadi stun. Skill floor rendah."},
+      {n:"Lukas", t:"S+", wr:52.3, ban:33.3, pick:0.9, note:"Resolve lebih cepat penuh, dua skill damage naik. Lemah di game pendek, kuat setelahnya."},
+      {n:"Alice", t:"S", wr:50.9, ban:13.5, pick:1.0, note:"Sustain + zona kontrol. Bagus buat lane yang butuh tahan lama."},
+      {n:"Hilda", t:"S", wr:50.8, ban:13.0, pick:0.6, note:"Lane bully. Menang 1v1, rotasi awal cepat."},
+      {n:"Paquito", t:"S", wr:49.9, ban:17.4, pick:1.3, note:"Sangat kuat di tangan yang paham window combo, hampir useless kalau salah timing."},
+      {n:"Edith", t:"A", wr:52.3, ban:0.2, pick:0.3, note:"Tank-fighter fleksibel, aman dipakai EXP maupun roam."},
+      {n:"Benedetta", t:"A", wr:52.1, ban:0.4, pick:0.4, note:"Mobilitas tinggi, bagus lawan mage/marksman tanpa hard CC."},
+      {n:"Minsitthar", t:"A", wr:51.9, ban:4.6, pick:0.6, note:"Anti-dash. Jawaban langsung buat meta hero mobile."},
+      {n:"Barats", t:"A", wr:51.7, ban:3.7, pick:0.7, note:"Naik terus 30 hari terakhir; turun performa di game panjang, dietat X.Borg."},
+      {n:"Silvanna", t:"A", wr:51.3, ban:2.0, pick:1.0, note:"Duel kuat + lock target. Butuh tim yang follow up."}
+    ]
+  },
+  {
+    id:"jungle", no:"02", name:"Jungle",
+    sub:"Hirara masih <b>first pick / first ban</b> walau WR-nya biasa saja. Kalau Hirara hilang, jatuhnya ke jungler fighter: Sun, Aulus, Lukas.",
+    heroes:[
+      {n:"Hirara", t:"S+", wr:50.0, ban:67.5, pick:0.6, note:"Ban tertinggi di game. Kuat karena tempo & tekanan awal, bukan win rate — WR 50% di Mythic.", flag:"PRIORITY BAN"},
+      {n:"Popol and Kupa", t:"S", wr:54.2, ban:0.4, pick:0.4, note:"WR tertinggi di jungle dengan ban nyaris nol. Bisa jungle atau gold, sangat fleksibel.", flag:"FREE PICK"},
+      {n:"Sun", t:"S+", wr:53.7, ban:36.4, pick:1.8, note:"Clear cepat, scaling endgame gila. Clone bikin objective race menang."},
+      {n:"Aulus", t:"S+", wr:53.7, ban:31.7, pick:0.8, note:"Jungler fighter paling aman: clear cepat, ult kebal CC, gank dengan stun."},
+      {n:"Lukas", t:"S+", wr:52.3, ban:33.3, pick:0.9, note:"Bisa jungle/EXP. Ban-nya tinggi karena flex, bukan karena WR-nya ekstrem."},
+      {n:"Saber", t:"S+", wr:51.1, ban:25.0, pick:1.0, note:"2.1.88 menggeser ke damage sustain + item fighter. Lebih diban di Mythic daripada Glory."},
+      {n:"Alice", t:"S", wr:50.9, ban:13.5, pick:1.0, note:"Jungle magic damage dengan sustain besar, susah di-burst."},
+      {n:"Nolan", t:"S", wr:49.8, ban:13.5, pick:1.8, note:"Mobilitas tinggi, ban-nya naik karena tekanan awal."},
+      {n:"Ling", t:"A", wr:52.5, ban:0.6, pick:0.7, note:"Masih viable dan hampir selalu kebuka, tapi tiap tim sekarang punya jawabannya."},
+      {n:"Barats", t:"A", wr:51.7, ban:3.7, pick:0.7, note:"Frontline yang tetap punya damage — jungler yang memaafkan kesalahan."},
+      {n:"Bane", t:"A", wr:51.7, ban:0.2, pick:0.3, note:"Split push + burst, pick tipis-tipis yang aman."},
+      {n:"Fredrinn", t:"A", wr:51.3, ban:1.7, pick:0.5, note:"Tanky jungler buat tim yang butuh frontline, bukan assassin."},
+      {n:"Natalia", t:"A", wr:50.7, ban:1.9, pick:0.3, note:"Early pressure ekstrem, tapi jatuh kalau game molor."},
+      {n:"Aamon", t:"A", wr:50.3, ban:2.5, pick:0.6, note:"Burst dari stealth, bagus lawan backline tanpa vision."}
+    ]
+  },
+  {
+    id:"mid", no:"03", name:"Mid Lane",
+    sub:"Valir paling konsisten: <b>54.4% WR dengan ban cuma 4%</b>. Eudora justru menduduki S+ karena ban 47.6%, bukan karena statistik menangnya.",
+    heroes:[
+      {n:"Valir", t:"S", wr:54.4, ban:4.0, pick:1.3, note:"WR tertinggi di mid, di atas rata-rata di semua rank dan game panjang. Counter: Rafaela, Kaja."},
+      {n:"Eudora", t:"S+", wr:50.5, ban:47.6, pick:1.8, note:"Revamp bikin combo satu-kali-habisin. Posisi S+ dari ban, menang di game pendek."},
+      {n:"Gord", t:"A", wr:52.7, ban:0.5, pick:0.6, note:"Poke jarak jauh, ban hampir nol. Mage paling aman buat first pick."},
+      {n:"Zhask", t:"A", wr:52.7, ban:0.4, pick:0.3, note:"Spawn-nya mengunci area objective dan turret push."},
+      {n:"Yve", t:"A", wr:52.6, ban:0.1, pick:0.1, note:"Zona ult luas, tapi sampel mainnya sangat kecil."},
+      {n:"Cyclops", t:"A", wr:51.6, ban:0.3, pick:0.7, note:"Mudah dipakai, burst single-target, cocok buat pemain baru di mid."},
+      {n:"Kadita", t:"A", wr:51.4, ban:2.9, pick:0.8, note:"Assassin-mage: burst instan. Movement speed dipotong 250→240 di 2.2.16."},
+      {n:"Kagura", t:"A", wr:51.3, ban:1.4, pick:0.9, note:"Ceiling tinggi, tapi dihukum assassin begitu manajemen umbrella meleset."},
+      {n:"Zetian", t:"A", wr:51.2, ban:4.7, pick:1.7, note:"Ult bisa reveal + stun dari jauh. Bagus buat pick-off."},
+      {n:"Cecilion", t:"A", wr:51.1, ban:0.2, pick:0.7, note:"Endgame tanpa batas, asal selamat 15 menit pertama."},
+      {n:"Novaria", t:"A", wr:49.7, ban:3.9, pick:1.2, note:"Utility vision + poke, WR di bawah rata-rata tapi sering diban."},
+      {n:"Lylia", t:"B", wr:49.7, ban:0.4, pick:0.6, note:"Kontrol zona, butuh tim yang memanfaatkan slow."}
+    ]
+  },
+  {
+    id:"gold", no:"04", name:"Gold Lane",
+    sub:"Lane paling tipis: <b>cuma Obsidia yang S+ murni</b>, dan dia diban 50.5%. Siapkan minimal 2 marksman cadangan sebelum draft.",
+    heroes:[
+      {n:"Obsidia", t:"S+", wr:53.2, ban:50.5, pick:2.1, note:"DPS konsisten pengganti gaya hyper-carry Hanabi/Miya. Pick pertama atau ban.", flag:"MUST PICK/BAN"},
+      {n:"Popol and Kupa", t:"S", wr:54.2, ban:0.4, pick:0.4, note:"WR terbaik di gold, ban hampir nol. Bisa juga jungle."},
+      {n:"Bruno", t:"S", wr:53.5, ban:0.3, pick:0.7, note:"Rework: crit konsisten + bola memantul. Pick gold paling aman kalau Obsidia hilang."},
+      {n:"Hanabi", t:"S", wr:52.7, ban:4.2, pick:2.4, note:"Kebal CC selama shield aktif. Kalah efektif di Mythic Glory dan game panjang."},
+      {n:"Irithel", t:"A", wr:52.2, ban:0.3, pick:0.4, note:"Mobilitas sambil menembak, bagus lawan frontline tebal."},
+      {n:"Natan", t:"A", wr:51.4, ban:0.2, pick:0.3, note:"Clone + scaling akhir, butuh proteksi awal."},
+      {n:"Clint", t:"A", wr:50.5, ban:0.6, pick:0.7, note:"Poke dan burst jarak jauh, aman di lane."},
+      {n:"Miya", t:"A", wr:49.7, ban:4.5, pick:2.2, note:"Hero paling banyak dimainkan di game, tapi dipotong di 2.2.16."},
+      {n:"Beatrix", t:"B", wr:50.3, ban:0.4, pick:0.7, note:"Power tinggi kalau paham pemilihan senjata. Salah senjata = damage hilang."},
+      {n:"Moskov", t:"B", wr:50.2, ban:0.3, pick:0.9, note:"Lockdown + push turret cepat, tapi rawan dive."},
+      {n:"Brody", t:"B", wr:49.9, ban:1.5, pick:0.8, note:"Burst awal kuat, jatuh di late game."},
+      {n:"Ixia", t:"B", wr:49.9, ban:0.8, pick:0.7, note:"Teamfight AoE bagus bila tim bisa menahan frontline."},
+      {n:"Melissa", t:"B", wr:48.8, ban:0.7, pick:0.3, note:"Satu-satunya marksman yang bisa menyelesaikan masalah dive sendirian."}
+    ]
+  },
+  {
+    id:"roam", no:"05", name:"Roam",
+    sub:"Lane paling padat: <b>8 hero S+</b>. Belerick jadi ban nomor satu di game (57.7%), tapi WR-nya cuma 51.8%. Minotaur &amp; Khufra paling aman karena jarang diban.",
+    heroes:[
+      {n:"Marcel", t:"S+", wr:57.3, ban:41.1, pick:0.3, note:"WR tertinggi di roam, tapi sampel mainnya kecil (0.3% pick). 2.1.88 menghapus immobilize skill 1."},
+      {n:"Belerick", t:"S+", wr:51.8, ban:57.7, pick:1.7, note:"Ban tertinggi di game. Taunt AoE mematikan buat tim terkoordinasi; dietat Lesley &amp; Beatrix.", flag:"BAN #1"},
+      {n:"Gloo", t:"S+", wr:54.4, ban:43.4, pick:0.8, note:"Diban ~setengah game. Nempel ke carry lawan dan bagikan damage."},
+      {n:"Rafaela", t:"S+", wr:54.6, ban:12.1, pick:0.8, note:"Recharge resurrection dipotong di 2.1.88 → WR melonjak. Sustain + speed buff."},
+      {n:"Estes", t:"S+", wr:52.8, ban:47.2, pick:0.6, note:"Mendominasi komposisi tanpa anti-heal; langsung ambruk begitu lawan beli item anti-heal."},
+      {n:"Floryn", t:"S+", wr:54.2, ban:13.2, pick:1.0, note:"Nilai tempo, bukan late game: WR turun di bawah rata-rata setelah menit 18."},
+      {n:"Carmilla", t:"S+", wr:53.2, ban:21.7, pick:1.3, note:"Kekuatannya tergantung partner. Duo dengan Diggie/Floryn/Mathilda paling menonjol."},
+      {n:"Saber", t:"S+", wr:51.1, ban:25.0, pick:1.0, note:"Roam burst: eksekusi satu target lalu 4v5."},
+      {n:"Khufra", t:"S", wr:54.6, ban:2.0, pick:0.3, note:"Jawaban struktural untuk semua hero mobile. Ban cuma 2% — hampir selalu kebuka.", flag:"FREE PICK"},
+      {n:"Diggie", t:"S", wr:54.4, ban:3.7, pick:0.2, note:"Anti-CC + vision. Sampel kecil, jadi angka WR-nya jangan dijadikan patokan tunggal."},
+      {n:"Minotaur", t:"S", wr:53.6, ban:7.9, pick:0.9, note:"Roamer paling 'selalu ada': WR tinggi dengan ban rendah."},
+      {n:"Lolita", t:"S", wr:53.2, ban:0.2, pick:0.1, note:"Blokir projectile, tapi sampel terlalu tipis untuk dibaca serius."},
+      {n:"Atlas", t:"S", wr:52.0, ban:9.9, pick:1.0, note:"Engage grup terbaik; butuh support di sisinya. Marcel jadi lawan terburuknya."},
+      {n:"Hilda", t:"S", wr:50.8, ban:13.0, pick:0.6, note:"Roam agresif yang menang lane awal dan invasi."},
+      {n:"Angela", t:"S", wr:50.3, ban:11.7, pick:1.8, note:"Bergantung level teman yang di-attach — tidak stabil di solo queue."},
+      {n:"Edith", t:"A", wr:52.3, ban:0.2, pick:0.3, note:"Tank yang bisa jadi damage dealer, fleksibel EXP/roam."},
+      {n:"Minsitthar", t:"A", wr:51.9, ban:4.6, pick:0.6, note:"Ult anti-dash mengunci hero mobile di area kecil."},
+      {n:"Kalea", t:"A", wr:50.4, ban:7.1, pick:0.8, note:"Dapat buff lagi di 2.2.16a, mulai dipakai di high rank."},
+      {n:"Natalia", t:"A", wr:50.7, ban:1.9, pick:0.3, note:"Roam invasi dengan burst, bagus buat mengacaukan jungler lawan."}
+    ]
+  }
+];
+
+/* ---------- render lane sections ---------- */
+const tierKey = {"S+":"splus","S":"s","A":"a","B":"b","C":"c"};
+const tierStars = {"S+":5,"S":4,"A":3,"B":2,"C":1};
+
+function initials(name){
+  const clean = name.replace(/&amp;/g,"&").replace(/ and /g," & ");
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+
+const lanesEl = document.getElementById("lanes");
+
+lanes.forEach(lane => {
+  const sec = document.createElement("section");
+  sec.id = lane.id;
+  const countPlus = lane.heroes.filter(h=>h.t==="S+").length;
+  sec.innerHTML = `
+    <div class="sec-head">
+      <h2><span class="n">${lane.no}</span> ${lane.name}</h2>
+      <span class="pill">${lane.heroes.length} hero · ${countPlus} tier S+</span>
+    </div>
+    <p class="sub">${lane.sub}</p>
+    <div class="grid"></div>`;
+  const grid = sec.querySelector(".grid");
+
+  lane.heroes.forEach(h => {
+    const card = document.createElement("article");
+    card.className = "hero t-" + tierKey[h.t];
+    card.dataset.search = (h.n + " " + lane.name + " " + lane.id + " " + h.t + " " + (h.flag || "")).toLowerCase();
+    card.innerHTML = `
+      <div class="top">
+        <div class="av">${initials(h.n)}</div>
+        <div>
+          <div class="hname">${h.n}</div>
+          <span class="lane-tag">${lane.name}${h.flex ? " · " + h.flex : ""}</span>
+        </div>
+        <span class="tier">${h.t}</span>
+      </div>
+      <div class="stats">
+        <div class="stat">WIN RATE<b class="win">${h.wr}%</b></div>
+        <div class="stat">BAN<b>${h.ban}%</b></div>
+        <div class="stat">PICK<b>${h.pick}%</b></div>
+      </div>
+      <div class="badge-row">
+        <div class="stars">${Array.from({length:5},(_,i)=>`<i class="${i < tierStars[h.t] ? "on":""}"></i>`).join("")}</div>
+        ${h.flag ? `<span class="flag">${h.flag}</span>` : ""}
+      </div>
+      <p class="note">${h.note}</p>`;
+    grid.appendChild(card);
+  });
+
+  lanesEl.appendChild(sec);
+});
+
+/* ---------- search ---------- */
+const searchWrap = document.createElement("div");
+searchWrap.className = "search-wrap";
+searchWrap.innerHTML = `<input type="search" id="q" placeholder="Cari hero… (mis. Valir, roam, S+)" />
+  <span class="hint" id="count"></span>`;
+lanesEl.parentNode.insertBefore(searchWrap, lanesEl);
+
+const allHeroCards = Array.from(document.querySelectorAll(".hero"));
+const countEl = document.getElementById("count");
+const noRes = document.createElement("p");
+noRes.className = "nores";
+noRes.textContent = "Hero tidak ditemukan. Coba nama lain, atau ketik nama lane (exp / jungle / mid / gold / roam).";
+lanesEl.parentNode.insertBefore(noRes, lanesEl.nextSibling);
+countEl.textContent = allHeroCards.length + " hero";
+
+document.getElementById("q").addEventListener("input", e => {
+  const q = e.target.value.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll("#lanes section").forEach(sec => {
+    let visible = 0;
+    sec.querySelectorAll(".hero").forEach(card => {
+      const hit = !q || card.dataset.search.includes(q);
+      card.style.display = hit ? "" : "none";
+      if(hit) visible++;
+    });
+    sec.style.display = visible ? "" : "none";
+    shown += visible;
+  });
+  countEl.textContent = shown + " hero";
+  noRes.style.display = shown ? "none" : "block";
+});
+
+/* ---------- ban priority chart ---------- */
+const allHeroes = [];
+lanes.forEach(l => l.heroes.forEach(h => allHeroes.push({...h, lane:l.name})));
+
+const seen = new Set();
+const unique = allHeroes.filter(h => seen.has(h.n) ? false : (seen.add(h.n), true));
+const topBan = [...unique].sort((a,b)=>b.ban-a.ban).slice(0,12);
+document.getElementById("banChart").innerHTML = topBan.map(h => `
+  <div class="bar-row">
+    <span class="nm">${h.n} <span class="hint">· ${h.lane.replace(" Lane","")}</span></span>
+    <div class="track"><div class="fill" style="width:${Math.min(100,h.ban)}%"></div></div>
+    <span class="vl">${h.ban}%</span>
+  </div>`).join("");
+
+/* ---------- sleepers: WR tinggi, ban rendah ---------- */
+const sleepers = unique
+  .filter(h => h.ban <= 5 && h.wr >= 50.2)
+  .sort((a,b)=> b.wr - a.wr)
+  .slice(0,10);
+
+document.getElementById("sleeperChart").innerHTML = sleepers.map(h => {
+  const score = Math.min(100, (h.wr - 47) / 10 * 100);
+  return `
+  <div class="bar-row low">
+    <span class="nm">${h.n} <span class="hint">· ${h.lane.replace(" Lane","")}</span></span>
+    <div class="track"><div class="fill" style="width:${score}%"></div></div>
+    <span class="vl">${h.wr}% WR · ${h.ban}% ban</span>
+  </div>`;
+}).join("");
+</script>
+</body>
+</html>
