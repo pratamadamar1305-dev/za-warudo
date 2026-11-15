@@ -207,6 +207,7 @@
       <span class="pill">Patch <b>2.2.16a</b></span>
       <span class="pill">Season <b>42</b></span>
       <span class="pill">133 hero</span>
+      <span class="pill">Min. <b>10 hero</b> / lane</span>
       <span class="pill">Update <b>11 Nov 2026</b></span>
       <span class="pill">Sumber: <b>mlbbdex · mlbbhub</b></span>
     </div>
@@ -231,7 +232,8 @@
     <div class="sec-head">
       <h2><span class="n">00</span> Cheat sheet draft</h2>
     </div>
-    <p class="sub">Kalau cuma mau satu tabel: ini pick terbaik, alternatif aman, dan siapa yang wajib di-ban per lane (patch 2.2.16a).</p>
+    <p class="sub">Kalau cuma mau satu tabel: ini pick terbaik, alternatif aman, dan siapa yang wajib di-ban per lane (patch 2.2.16a).
+    Daftar lengkapnya di bawah — tiap lane minimal 10 hero, dari tier S+ sampai B.</p>
     <div class="cardish">
       <table>
         <thead>
@@ -400,7 +402,12 @@ const lanes = [
       {n:"Benedetta", t:"A", wr:52.1, ban:0.4, pick:0.4, note:"Mobilitas tinggi, bagus lawan mage/marksman tanpa hard CC."},
       {n:"Minsitthar", t:"A", wr:51.9, ban:4.6, pick:0.6, note:"Anti-dash. Jawaban langsung buat meta hero mobile."},
       {n:"Barats", t:"A", wr:51.7, ban:3.7, pick:0.7, note:"Naik terus 30 hari terakhir; turun performa di game panjang, dietat X.Borg."},
-      {n:"Silvanna", t:"A", wr:51.3, ban:2.0, pick:1.0, note:"Duel kuat + lock target. Butuh tim yang follow up."}
+      {n:"Silvanna", t:"A", wr:51.3, ban:2.0, pick:1.0, note:"Duel kuat + lock target. Butuh tim yang follow up."},
+      {n:"Guinevere", t:"A", wr:51.2, ban:1.9, pick:0.8, note:"Combo airborne AoE, kuat di teamfight rapat. Rawan saat skill meleset."},
+      {n:"Aldous", t:"A", wr:50.5, ban:0.5, pick:0.4, note:"Dapat buff di 2.2.16. Scaling stack tanpa batas — sabar 10 menit pertama."},
+      {n:"Terizla", t:"A", wr:50.5, ban:0.2, pick:0.3, note:"Frontline tahan burst, hampir tak pernah diban. Bagus lawan tim damage fisik."},
+      {n:"Badang", t:"A", wr:50.1, ban:3.4, pick:1.3, note:"Dinding batu memotong ruang gerak marksman; bisa juga roam."},
+      {n:"Sora", t:"B", wr:49.9, ban:4.3, pick:0.7, note:"Bisa ganti mode burst ↔ tanky CC. Fleksibel, tapi butuh tim yang baca situasi."}
     ]
   },
   {
@@ -420,7 +427,12 @@ const lanes = [
       {n:"Bane", t:"A", wr:51.7, ban:0.2, pick:0.3, note:"Split push + burst, pick tipis-tipis yang aman."},
       {n:"Fredrinn", t:"A", wr:51.3, ban:1.7, pick:0.5, note:"Tanky jungler buat tim yang butuh frontline, bukan assassin."},
       {n:"Natalia", t:"A", wr:50.7, ban:1.9, pick:0.3, note:"Early pressure ekstrem, tapi jatuh kalau game molor."},
-      {n:"Aamon", t:"A", wr:50.3, ban:2.5, pick:0.6, note:"Burst dari stealth, bagus lawan backline tanpa vision."}
+      {n:"Aamon", t:"A", wr:50.3, ban:2.5, pick:0.6, note:"Burst dari stealth, bagus lawan backline tanpa vision."},
+      {n:"Leomord", t:"A", wr:50.2, ban:0.6, pick:0.3, note:"Kuda + damage area, kuat di game pendek. Sampel mainnya tipis."},
+      {n:"Hanzo", t:"A", wr:49.8, ban:5.6, pick:0.4, note:"Dikuatkan di 2.1.88 untuk turtle & lord. Ban-nya naik walau WR turun."},
+      {n:"Julian", t:"B", wr:49.8, ban:0.8, pick:0.7, note:"Gank level 3, bisa jungle/EXP/mid. Butuh eksekusi combo yang rapi."},
+      {n:"Yi Sun-shin", t:"B", wr:49.0, ban:2.5, pick:1.0, note:"Jungler paling sering dipakai di Mythic Glory — efektif di game pendek."},
+      {n:"Suyou", t:"B", wr:49.6, ban:1.6, pick:1.1, note:"Dua form (pedang/tombak), burst + mobilitas. Popularitasnya turun 7 hari terakhir."}
     ]
   },
   {
@@ -438,7 +450,13 @@ const lanes = [
       {n:"Zetian", t:"A", wr:51.2, ban:4.7, pick:1.7, note:"Ult bisa reveal + stun dari jauh. Bagus buat pick-off."},
       {n:"Cecilion", t:"A", wr:51.1, ban:0.2, pick:0.7, note:"Endgame tanpa batas, asal selamat 15 menit pertama."},
       {n:"Novaria", t:"A", wr:49.7, ban:3.9, pick:1.2, note:"Utility vision + poke, WR di bawah rata-rata tapi sering diban."},
-      {n:"Lylia", t:"B", wr:49.7, ban:0.4, pick:0.6, note:"Kontrol zona, butuh tim yang memanfaatkan slow."}
+      {n:"Lylia", t:"B", wr:49.7, ban:0.4, pick:0.6, note:"Kontrol zona, butuh tim yang memanfaatkan slow."},
+      {n:"Vale", t:"B", wr:49.9, ban:0.2, pick:0.5, note:"Utilitas lengkap (stun, knock-up, damage) — hasilnya tergantung pilihan upgrade skill."},
+      {n:"Xavier", t:"B", wr:49.7, ban:0.1, pick:0.5, note:"Poke lintas map dengan ult global. Aman, tapi lambat menutup game."},
+      {n:"Odette", t:"B", wr:49.5, ban:0.3, pick:0.6, note:"Burst area sangat besar kalau dapat proteksi frontline."},
+      {n:"Vexana", t:"B", wr:49.1, ban:1.1, pick:1.4, note:"Zona kontrol + boneka. Butuh tim yang memaksa lawan masuk area."},
+      {n:"Selena", t:"B", wr:48.2, ban:6.9, pick:1.6, note:"Scouting + burst trap. Lebih kuat sebagai roamer daripada mid murni."},
+      {n:"Nana", t:"B", wr:47.5, ban:3.7, pick:1.7, note:"Utility CC dan poke; WR di bawah rata-rata tapi tetap sering dipakai."}
     ]
   },
   {
@@ -457,7 +475,12 @@ const lanes = [
       {n:"Moskov", t:"B", wr:50.2, ban:0.3, pick:0.9, note:"Lockdown + push turret cepat, tapi rawan dive."},
       {n:"Brody", t:"B", wr:49.9, ban:1.5, pick:0.8, note:"Burst awal kuat, jatuh di late game."},
       {n:"Ixia", t:"B", wr:49.9, ban:0.8, pick:0.7, note:"Teamfight AoE bagus bila tim bisa menahan frontline."},
-      {n:"Melissa", t:"B", wr:48.8, ban:0.7, pick:0.3, note:"Satu-satunya marksman yang bisa menyelesaikan masalah dive sendirian."}
+      {n:"Melissa", t:"B", wr:48.8, ban:0.7, pick:0.3, note:"Satu-satunya marksman yang bisa menyelesaikan masalah dive sendirian."},
+      {n:"Karrie", t:"B", wr:48.7, ban:1.0, pick:0.5, note:"True damage lewat Lightwheel Mark — pick anti-tank paling jelas."},
+      {n:"Claude", t:"B", wr:48.8, ban:0.2, pick:0.8, note:"AoE ult besar, tapi butuh frontline dan timing masuk yang pas."},
+      {n:"Layla", t:"B", wr:49.5, ban:2.0, pick:2.0, note:"Range terpanjang di game, tapi nol mobilitas. Butuh roamer yang menempel."},
+      {n:"Lesley", t:"B", wr:48.3, ban:8.4, pick:1.9, note:"Burst jarak jauh; dipakai untuk menekan Belerick dan tank lambat."},
+      {n:"Wanwan", t:"B", wr:48.0, ban:0.1, pick:0.1, note:"Immunity + true damage kalau semua weak point kena. Sampel mainnya sangat kecil."}
     ]
   },
   {
@@ -482,7 +505,9 @@ const lanes = [
       {n:"Edith", t:"A", wr:52.3, ban:0.2, pick:0.3, note:"Tank yang bisa jadi damage dealer, fleksibel EXP/roam."},
       {n:"Minsitthar", t:"A", wr:51.9, ban:4.6, pick:0.6, note:"Ult anti-dash mengunci hero mobile di area kecil."},
       {n:"Kalea", t:"A", wr:50.4, ban:7.1, pick:0.8, note:"Dapat buff lagi di 2.2.16a, mulai dipakai di high rank."},
-      {n:"Natalia", t:"A", wr:50.7, ban:1.9, pick:0.3, note:"Roam invasi dengan burst, bagus buat mengacaukan jungler lawan."}
+      {n:"Natalia", t:"A", wr:50.7, ban:1.9, pick:0.3, note:"Roam invasi dengan burst, bagus buat mengacaukan jungler lawan."},
+      {n:"Faramis", t:"A", wr:50.4, ban:0.4, pick:0.1, note:"Counter paling jelas buat Gloo & Aulus menurut data matchup."},
+      {n:"Kaja", t:"A", wr:49.6, ban:13.7, pick:0.6, note:"Diban karena takut (13.7%) padahal WR 49.6%: contoh ban trap paling jelas."}
     ]
   }
 ];
