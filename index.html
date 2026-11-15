@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#0b1026" />
+    <title>EUROBEAT DRIFT LEGEND — Gunma Downhill</title>
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="gl"></canvas>
+      <div id="ui"></div>
+      <div id="boot" class="boot">
+        <div class="boot-inner">
+          <div class="boot-kanji">頭文字の伝説</div>
+          <h1 class="boot-title">EUROBEAT<br /><span>DRIFT LEGEND</span></h1>
+          <p class="boot-sub">GUNMA DOWNHILL — 群馬</p>
+          <button id="boot-start" class="btn btn-primary btn-xl">TAP TO START</button>
+          <p class="boot-hint">Keyboard · Gamepad · Touch</p>
+        </div>
+      </div>
+      <div id="fatal" class="fatal" hidden>
+        <div class="fatal-inner">
+          <h2>Gagal memulai renderer</h2>
+          <pre id="fatal-msg"></pre>
+          <p>Pastikan WebGL2 aktif di browser kamu, lalu muat ulang halaman.</p>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
