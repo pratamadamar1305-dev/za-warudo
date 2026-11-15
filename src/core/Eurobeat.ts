@@ -600,6 +600,12 @@ export class Eurobeat {
     return this.ctx.currentTime < this.crossfadeEnd ? this.prevTrackIndex : null;
   }
 
+  /** Batalkan crossfade yang sedang berjalan (dipakai saat mulai race baru). */
+  clearCrossfade(): void {
+    this.crossfadeEnd = 0;
+    this.prevTrackIndex = this.trackIndex;
+  }
+
   /** Pindah track dengan crossfade ~2 bar. */
   crossfadeTo(index: number): void {
     if (!this.built || index === this.trackIndex) return;

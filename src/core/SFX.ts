@@ -422,6 +422,18 @@ export class SFX {
       g.disconnect();
       send.disconnect();
     };
+    // jaring pengaman: kalau onended tidak pernah dipanggil (tab dibekukan),
+    // node tetap dilepas lewat timer sekali pakai.
+    window.setTimeout(() => {
+      try {
+        src.disconnect();
+        bp.disconnect();
+        g.disconnect();
+        send.disconnect();
+      } catch {
+        /* sudah dilepas */
+      }
+    }, 900);
 
     // metal ring
     const partials = [480, 1150, 2300];
@@ -573,7 +585,11 @@ export class SFX {
       this.boostLfo.frequency.value = 0.7;
       this.boostLfo.start();
     } else if (!on && this.boostLfo) {
-      this.boostLfo.stop();
+      try {
+        this.boostLfo.stop();
+      } catch {
+        /* sudah berhenti */
+      }
       this.boostLfo.disconnect();
       this.boostLfo = null;
     }
