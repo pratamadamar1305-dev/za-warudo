@@ -8,7 +8,11 @@
     "dev": "vite --host 0.0.0.0",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test": "node tools/sim-test.mjs && node tools/race-test.mjs && node tools/audio-test.mjs",
+    "test:sim": "node tools/sim-test.mjs",
+    "test:race": "node tools/race-test.mjs",
+    "test:audio": "node tools/audio-test.mjs"
   },
   "dependencies": {
     "three": "^0.180.0"

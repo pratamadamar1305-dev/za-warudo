@@ -92,6 +92,7 @@ let ghost: GhostRecorder | null = null;
 let ghostCar: CarModel | null = null;
 let cutscene: Cutscene | null = null;
 let introActive = false;
+let finishedHandled = false;
 let raceTime = 0;
 let lastHitAt = 0;
 let cameraModeIndex = 0;
@@ -363,6 +364,7 @@ function startRace(mode: RaceMode, rivalId: string): void {
   currentMode = mode;
   currentRival = RIVALS.find((r) => r.id === rivalId) ?? RIVALS[0]!;
   raceSeed = (raceSeed * 1664525 + 1013904223) >>> 0;
+  finishedHandled = false;
 
   const track = buildGunmaPass();
   trackMesh = buildTrackMesh(track);
@@ -553,6 +555,9 @@ function applyUpgrades(spec: ReturnType<typeof carById>, upg?: { tire: number; s
 
 function fixedStep(dt: number): void {
   if (states.current !== "Race" || !race) return;
+  // Setelah finish, fisika berhenti agar tidak ada mobil "jalan sendiri"
+  // di belakang layar hasil.
+  if (race.finished) return;
 
   const steerRaw = input.steerAxis() * (save.data.settings.invertSteer ? -1 : 1);
   const playerInput = {
@@ -625,8 +630,6 @@ function fixedStep(dt: number): void {
   }
 }
 
-let finishedHandled = false;
-
 function finishRace(): void {
   if (finishedHandled || !race?.result) return;
   finishedHandled = true;
@@ -669,22 +672,22 @@ function finishRace(): void {
         : currentRival.lines.finishWin[0]
       : "Yosha! Catat waktunya.";
   if (finalLine && save.data.settings.subtitles) {
-    dialog?.say(currentRival.name, finalLine);
+    dialog?.say(res.totalRacers > 1 ? currentRival.name : "PLAYER", finalLine);
   }
 
   sfx?.finishFanfare();
   eurobeat?.setDriftIntensity(0);
   hud?.hide();
-  dialog?.hide();
 
   window.setTimeout(() => {
     if (states.current !== "Race") return;
+    dialog?.hide();
     states.go("Results");
     loop!.paused = true;
     results?.show(res, prevBest);
     results?.toastCash(cashEarned);
     sfx?.confirm();
-  }, 900);
+  }, 1400);
 }
 
 function raceKey(mode: RaceMode, rivalId: string): string {

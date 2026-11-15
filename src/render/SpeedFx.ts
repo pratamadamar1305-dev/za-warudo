@@ -319,7 +319,9 @@ export class SpeedFx {
     r.autoClear = prevAutoClear;
   }
 
+  /** Dipanggil saat canvas/resolusi berubah drastis — aman walau sudah dispose. */
   dispose(): void {
+    if (!this.sceneRT) return;
     this.sceneRT.dispose();
     this.brightRT.dispose();
     this.blurRT.dispose();
