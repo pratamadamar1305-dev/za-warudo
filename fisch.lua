@@ -1,297 +1,319 @@
---[[
-    [K] FISCH PRIVATE BUILD v3.0 — RAYFIELD UI
-    Keyless. Paths locked from Kanha's console dump.
-]]
+--!strict
+--!optimize 2
+-- ENV: Roblox Luau Client
 
-if not game:IsLoaded() then game.Loaded:Wait() end
-
--- ────────────────────────────────────────────
--- RAYFIELD LOADER
--- ────────────────────────────────────────────
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-local Players     = game:GetService("Players")
-local RS          = game:GetService("ReplicatedStorage")
-local UserInput   = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
-local Player      = Players.LocalPlayer
 
--- ────────────────────────────────────────────
--- CONFIG
--- ────────────────────────────────────────────
-local CONFIG = {
-    AutoFish        = false,
-    AutoShake       = true,
-    ESP             = false,
-    Speed           = 22,
-    AntiAFK         = true,
-    RandomizeTiming = true,
-    ShakeInterval   = 0.08,
+local LocalPlayer = Players.LocalPlayer
+
+-- Type definitions for strict mode
+type Config = {
+	AutoFish: boolean,
+	AutoShake: boolean,
+	AutoReel: boolean,
+	AntiAFK: boolean,
 }
 
-local function jitter(base)
-    if not CONFIG.RandomizeTiming then return base end
-    return base + math.random(-40, 40) / 1000
-end
-local function wait_j(t) task.wait(jitter(t)) end
-
--- ────────────────────────────────────────────
--- ANTI-BAN & ANTI-AFK
--- ────────────────────────────────────────────
-Player.Idled:Connect(function()
-    if CONFIG.AntiAFK then
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new())
-    end
-end)
-
-local last_fire = 0
-local function safe_fire(remote, ...)
-    if not remote then return end
-    local now = tick()
-    if now - last_fire < (0.08 + math.random()*0.04) then return end
-    last_fire = now
-    local args = {...}
-    pcall(function() remote:FireServer(table.unpack(args)) end)
-end
-
--- ────────────────────────────────────────────
--- REMOTES (Exact Paths from Console)
--- ────────────────────────────────────────────
-local Remotes = {
-    RodCast      = RS:WaitForChild("events", 10) and RS.events:WaitForChild("rod_cast", 5),
-    ReelFinished = RS:WaitForChild("events", 10) and RS.events:WaitForChild("reelfinished", 5),
-    RodEquip     = RS:WaitForChild("events", 10) and RS.events:WaitForChild("anno_equip", 5),
+type RemotesType = {
+	RodCast: RemoteEvent?,
+	ReelFinished: RemoteEvent?,
+	Shake: RemoteEvent?,
 }
 
-pcall(function()
-    Remotes.Shake = RS.resources.replicated.fishing.shakeui.safezone.shakeui.button.shake
-end)
+-- Constants
+local CONFIG: Config = {
+	AutoFish = false,
+	AutoShake = true,
+	AutoReel = true,
+	AntiAFK = true,
+}
 
--- ────────────────────────────────────────────
--- SHAKE PROMPT FINDER
--- ────────────────────────────────────────────
-local function find_shake_prompt()
-    local pg = Player:FindFirstChild("PlayerGui")
-    if not pg then return nil end
-    for _, d in ipairs(pg:GetDescendants()) do
-        if (d:IsA("TextButton") or d:IsA("ImageButton")) and d.Visible then
-            local n = d.Name:lower()
-            if n:find("shake") or n:find("reel") then
-                return d
-            end
-        end
-    end
-    return nil
+local Remotes: RemotesType = {
+	RodCast = nil,
+	ReelFinished = nil,
+	Shake = nil,
+}
+
+-- FIX(B1): Guard clause untuk mencegah double-inject, reset state di unload
+if getgenv().LoadedGodFisch then
+	warn("[K] Script already running.")
+	return
+end
+getgenv().LoadedGodFisch = true
+
+local connections: {RBXScriptConnection} = {}
+local cachedShakeButton: (TextButton | ImageButton)? = nil
+local isFishing: boolean = true
+
+-- Error logger (FIX(B6): jangan telan error mentah-mentah)
+local function logError(context: string, err: any)
+	warn(string.format("[K] Error in %s: %s", context, tostring(err)))
 end
 
--- ────────────────────────────────────────────
--- MAIN LOOP
--- ────────────────────────────────────────────
-task.spawn(function()
-    while task.wait() do
-        if not CONFIG.AutoFish then continue end
-
-        if math.random() < 0.04 then wait_j(0.7); continue end
-
-        if Remotes.RodCast then
-            safe_fire(Remotes.RodCast)
-        else
-            local tool = Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-            if tool then pcall(function() tool:Activate() end) end
-        end
-
-        wait_j(2.0)
-
-        local shake_deadline = tick() + 25
-        local had_bite = false
-        
-        while tick() < shake_deadline and CONFIG.AutoFish do
-            local prompt = find_shake_prompt()
-            if prompt then
-                had_bite = true
-                if CONFIG.AutoShake then
-                    pcall(function() prompt:Click() end)
-                    if Remotes.Shake then safe_fire(Remotes.Shake) end
-                end
-                wait_j(CONFIG.ShakeInterval)
-            else
-                if had_bite then break end
-                wait_j(0.15)
-            end
-        end
-
-        wait_j(0.4)
-        if Remotes.ReelFinished then safe_fire(Remotes.ReelFinished) end
-
-        wait_j(1.0)
-    end
-end)
-
--- ────────────────────────────────────────────
--- SPEED HANDLER
--- ────────────────────────────────────────────
-local function apply_speed()
-    local hum = Player.Character and Player.Character:FindFirstChildOfClass("Humanoid")
-    if hum then hum.WalkSpeed = CONFIG.Speed end
+local function safeDisconnect(conn: RBXScriptConnection)
+	local success, err = pcall(function()
+		conn:Disconnect()
+	end)
+	if not success then logError("safeDisconnect", err) end
 end
-Player.CharacterAdded:Connect(function(c)
-    c:WaitForChild("Humanoid")
-    apply_speed()
-end)
 
--- ────────────────────────────────────────────
--- ESP HANDLER
--- ────────────────────────────────────────────
-local drawings = {}
+local function unload()
+	isFishing = false
+	for _, conn in ipairs(connections) do
+		safeDisconnect(conn)
+	end
+	table.clear(connections) -- FIX(B7): clear tabel koneksi
+	getgenv().LoadedGodFisch = false
+end
+
+-- Fetch Remotes
 task.spawn(function()
-    while task.wait(0.5) do
-        if not CONFIG.ESP then
-            for _, hl in pairs(drawings) do hl:Remove() end
-            drawings = {}
-            continue
-        end
-        for _, d in ipairs(workspace:GetDescendants()) do
-            if d:IsA("Model") and d:FindFirstChild("Handle") then
-                local n = d.Name:lower()
-                if n:find("fish") or n:find("crab") or n:find("shark") or n:find("ray") then
-                    if not drawings[d] then
-                        local hl = Drawing.new("Highlight")
-                        hl.Adornee = d.Handle
-                        hl.FillColor = Color3.fromRGB(0, 255, 200)
-                        hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-                        hl.FillTransparency = 0.6
-                        hl.OutlineTransparency = 0
-                        drawings[d] = hl
-                    end
-                end
-            end
-        end
-    end
+	local events = ReplicatedStorage:WaitForChild("events", 10)
+	if events then
+		Remotes.RodCast = events:WaitForChild("rod_cast", 5) :: RemoteEvent?
+		Remotes.ReelFinished = events:WaitForChild("reelfinished", 5) :: RemoteEvent?
+	end
+	
+	local resources = ReplicatedStorage:FindFirstChild("resources")
+	if resources then
+		local replicated = resources:FindFirstChild("replicated")
+		if replicated then
+			local fishing = replicated:FindFirstChild("fishing")
+			if fishing then
+				local shakeui = fishing:FindFirstChild("shakeui")
+				if shakeui then
+					local safezone = shakeui:FindFirstChild("safezone")
+					if safezone then
+						local shakeui2 = safezone:FindFirstChild("shakeui")
+						if shakeui2 then
+							local button = shakeui2:FindFirstChild("button")
+							if button then
+								Remotes.Shake = button:FindFirstChild("shake") :: RemoteEvent?
+							end
+						end
+					end
+				end
+			end
+		end
+	end
 end)
 
--- ────────────────────────────────────────────
--- RAYFIELD UI
--- ────────────────────────────────────────────
+-- FIX(B2): Guard clause ketat pada status karakter
+local function onHeartbeat()
+	local char = LocalPlayer.Character
+	if not char then return end
+	
+	local hrp = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	
+	if hrp and hrp.Anchored then
+		hrp.Anchored = false
+	end
+	
+	if hum and hum.PlatformStand then
+		hum.PlatformStand = false
+	end
+end
+table.insert(connections, RunService.Heartbeat:Connect(onHeartbeat))
+
+-- Anti-AFK
+local function onIdled()
+	if CONFIG.AntiAFK then
+		VirtualUser:CaptureController()
+		VirtualUser:ClickButton2(Vector2.new())
+	end
+end
+table.insert(connections, LocalPlayer.Idled:Connect(onIdled))
+
+-- FIX(B3): Cache hasil GetDescendants untuk mencari tombol UI
+local function getShakeButton(): (TextButton | ImageButton)?
+	if cachedShakeButton and cachedShakeButton.Parent then
+		return cachedShakeButton
+	end
+	local pg = LocalPlayer:FindFirstChild("PlayerGui")
+	if not pg then return nil end
+	
+	local shakeui = pg:FindFirstChild("shakeui")
+	if not shakeui then return nil end
+	
+	for _, d in ipairs(shakeui:GetDescendants()) do
+		if (d:IsA("TextButton") or d:IsA("ImageButton")) and d.Visible then
+			cachedShakeButton = d
+			return d
+		end
+	end
+	return nil
+end
+
+local function doCast(): boolean
+	local char = LocalPlayer.Character
+	if not char then return false end
+	
+	local rod = char:FindFirstChildWhichIsA("Tool")
+	if not rod then
+		local bp = LocalPlayer:FindFirstChild("Backpack")
+		if bp then
+			for _, item in ipairs(bp:GetChildren()) do
+				if item:IsA("Tool") and string.find(item.Name:lower(), "rod", 1, true) then
+					item.Parent = char
+					task.wait(0.3)
+					rod = item
+					break
+				end
+			end
+		end
+	end
+	
+	if rod then
+		local success, err = pcall(function()
+			rod:Activate()
+		end)
+		if success then return true end
+		logError("doCast:Activate", err)
+	end
+	
+	if Remotes.RodCast then
+		local success, err = pcall(function()
+			Remotes.RodCast:FireServer()
+		end)
+		if success then return true end
+		logError("doCast:FireServer", err)
+	end
+	
+	return false
+end
+
+local function doShake(btn: Instance)
+	if Remotes.Shake then
+		local success, err = pcall(function()
+			Remotes.Shake:FireServer()
+		end)
+		if not success then logError("doShake:FireServer", err) end
+	end
+	
+	if btn then
+		local success, err = pcall(function()
+			btn:Click()
+		end)
+		if not success then logError("doShake:Click", err) end
+	end
+end
+
+local function doReel()
+	if not Remotes.ReelFinished then return end
+	local success, err = pcall(function()
+		Remotes.ReelFinished:FireServer(true)
+	end)
+	if not success then logError("doReel:true", err) end
+	
+	task.wait(0.1) -- FIX(B4): jeda antar remote fire agar tidak di-flag spam
+	
+	local success2, err2 = pcall(function()
+		Remotes.ReelFinished:FireServer()
+	end)
+	if not success2 then logError("doReel:nil", err2) end
+end
+
+-- Fishing Loop
+task.spawn(function()
+	while isFishing do
+		if CONFIG.AutoFish then
+			local casted = doCast()
+			if casted then
+				task.wait(1.5)
+				
+				-- FIX(B5): os.clock() ganti tick() yang deprecated
+				local deadline = os.clock() + 15
+				local hadBite = false
+				
+				while isFishing and os.clock() < deadline and CONFIG.AutoFish do
+					local btn = getShakeButton()
+					if btn then
+						hadBite = true
+						if CONFIG.AutoShake then
+							doShake(btn)
+							task.wait(0.08)
+						end
+					else
+						if hadBite then break end
+						task.wait(0.1)
+					end
+				end
+				
+				if isFishing and CONFIG.AutoReel then
+					doReel()
+				end
+				task.wait(2)
+			else
+				task.wait(1)
+			end
+		else
+			task.wait(0.5)
+		end
+	end
+end)
+
+-- UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
-    Name = "Fisch | [K] Private",
-    LoadingTitle = "Loading [K] build...",
-    LoadingSubtitle = "made for kanha",
-    ConfigurationSaving = {
-        Enabled = true,
-        FolderName = "K_Fisch",
-        FileName = "Config"
-    },
-    KeySystem = false
+	Name = "Fisch | [K] God-Tier",
+	LoadingTitle = "Injecting [K] Engine...",
+	LoadingSubtitle = "bypassing freeze, fixing casts",
+	ConfigurationSaving = { Enabled = true, FolderName = "K_Fisch", FileName = "GodTier" },
+	KeySystem = false,
 })
 
--- ─── TAB 1: MAIN ───
-local MainTab = Window:CreateTab("Main", 4483362458)
-local MainSection = MainTab:CreateSection("Automation")
-
+local MainTab = Window:CreateTab("Automation", 4483362458)
+MainTab:CreateSection("The Ultimate Loop")
 MainTab:CreateToggle({
-    Name = "Auto Fish",
-    CurrentValue = false,
-    Flag = "AutoFish",
-    Callback = function(v)
-        CONFIG.AutoFish = v
-    end
+	Name = "Auto Fish (All-in-One)",
+	CurrentValue = false,
+	Flag = "AutoFish",
+	Callback = function(v: boolean) CONFIG.AutoFish = v end,
 })
-
 MainTab:CreateToggle({
-    Name = "Auto Shake",
-    CurrentValue = true,
-    Flag = "AutoShake",
-    Callback = function(v)
-        CONFIG.AutoShake = v
-    end
+	Name = "Auto Shake",
+	CurrentValue = true,
+	Flag = "AutoShake",
+	Callback = function(v: boolean) CONFIG.AutoShake = v end,
+})
+MainTab:CreateToggle({
+	Name = "Auto Reel",
+	CurrentValue = true,
+	Flag = "AutoReel",
+	Callback = function(v: boolean) CONFIG.AutoReel = v end,
 })
 
-MainTab:CreateSlider({
-    Name = "Shake Speed (s)",
-    Range = {0.03, 0.2},
-    Increment = 0.01,
-    Suffix = "s",
-    CurrentValue = 0.08,
-    Flag = "ShakeSpeed",
-    Callback = function(v)
-        CONFIG.ShakeInterval = v
-    end
+local FixTab = Window:CreateTab("Fixer", 4483362458)
+FixTab:CreateSection("If stuck, tap here")
+FixTab:CreateButton({
+	Name = "FORCE UNFREEZE",
+	Callback = function()
+		local char = LocalPlayer.Character
+		if char then
+			local hum = char:FindFirstChildOfClass("Humanoid")
+			local hrp = char:FindFirstChild("HumanoidRootPart") :: BasePart?
+			if hrp then hrp.Anchored = false end
+			if hum then
+				hum.PlatformStand = false
+				hum.WalkSpeed = 16
+			end
+			Rayfield:Notify({ Title = "Unfrozen", Content = "Bisa gerak lagi.", Duration = 3 })
+		end
+	end,
 })
 
--- ─── TAB 2: PLAYER ───
-local PlayerTab = Window:CreateTab("Player", 4483362458)
-local PlayerSection = PlayerTab:CreateSection("Movement & Render")
-
-PlayerTab:CreateSlider({
-    Name = "WalkSpeed",
-    Range = {16, 150},
-    Increment = 1,
-    Suffix = "spd",
-    CurrentValue = 22,
-    Flag = "Speed",
-    Callback = function(v)
-        CONFIG.Speed = v
-        apply_speed()
-    end
+FixTab:CreateButton({
+	Name = "UNLOAD SCRIPT",
+	Callback = function()
+		unload()
+		if Rayfield then
+			Rayfield:Destroy()
+		end
+	end,
 })
 
-PlayerTab:CreateToggle({
-    Name = "ESP Fish",
-    CurrentValue = false,
-    Flag = "ESP",
-    Callback = function(v)
-        CONFIG.ESP = v
-    end
-})
-
--- ─── TAB 3: SETTINGS ───
-local SettingsTab = Window:CreateTab("Settings", 4483362458)
-local SettingsSection = SettingsTab:CreateSection("Anti-Ban")
-
-SettingsTab:CreateToggle({
-    Name = "Anti-AFK",
-    CurrentValue = true,
-    Flag = "AntiAFK",
-    Callback = function(v)
-        CONFIG.AntiAFK = v
-    end
-})
-
-SettingsTab:CreateToggle({
-    Name = "Randomize Timing (Jitter)",
-    CurrentValue = true,
-    Flag = "Jitter",
-    Callback = function(v)
-        CONFIG.RandomizeTiming = v
-    end
-})
-
-SettingsTab:CreateButton({
-    Name = "Re-lock Remotes",
-    Callback = function()
-        Remotes.RodCast      = RS.events:FindFirstChild("rod_cast")
-        Remotes.ReelFinished = RS.events:FindFirstChild("reelfinished")
-        Remotes.RodEquip     = RS.events:FindFirstChild("anno_equip")
-        pcall(function()
-            Remotes.Shake = RS.resources.replicated.fishing.shakeui.safezone.shakeui.button.shake
-        end)
-        Rayfield:Notify({Title="Remotes", Content="Locked in.", Duration=3})
-    end
-})
-
-SettingsTab:CreateButton({
-    Name = "Unload Script",
-    Callback = function()
-        Rayfield:Destroy()
-    end
-})
-
-Rayfield:Notify({
-    Title = "[K] Armed",
-    Content = "rod_cast / shake / reelfinished locked.",
-    Duration = 5,
-    Image = 4483362458
-})
-
-print("[K] Fisch v3.0 — Rayfield UI loaded.")
+Rayfield:Notify({ Title = "[K] God-Tier Ready", Content = "Cast, Shake, Reel 100% rewritten.", Duration = 5, Image = 4483362458 })
