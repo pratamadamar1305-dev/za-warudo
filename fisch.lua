@@ -17,8 +17,10 @@ shared.FischByteLoaded = true
 -- firesignal, getgc, cloneref, setthreadidentity, getconnections
 -- ============================================================
 
--- Set thread identity to 8 for full module access (Delta supports this).
-pcall(function() setthreadidentity(8) end)
+-- Thread identity: only set if needed for Net module require.
+-- Disabled by default — "invalid client" kick risk.
+-- Uncomment if Net module fails to load:
+-- pcall(function() setthreadidentity(8) end)
 
 -- Delta compatibility check: verify critical functions exist.
 local DELTA_COMPAT = {
@@ -57,15 +59,15 @@ if not DELTA_COMPAT.gethui then
 	getfenv().gethui = function() return nil end
 end
 
--- Services (use cloneref for anti-detection — Delta supports this).
-local playersService = cloneref(game:GetService("Players"))
-local replicatedStorage = cloneref(game:GetService("ReplicatedStorage"))
-local runService = cloneref(game:GetService("RunService"))
-local virtualInputManager = cloneref(game:GetService("VirtualInputManager"))
-local virtualUser = cloneref(game:GetService("VirtualUser"))
-local collectionService = cloneref(game:GetService("CollectionService"))
-local guiService = cloneref(game:GetService("GuiService"))
-local userInputService = cloneref(game:GetService("UserInputService"))
+-- Services (normal references — cloneref can trigger "invalid client").
+local playersService = game:GetService("Players")
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local runService = game:GetService("RunService")
+local virtualInputManager = game:GetService("VirtualInputManager")
+local virtualUser = game:GetService("VirtualUser")
+local collectionService = game:GetService("CollectionService")
+local guiService = game:GetService("GuiService")
+local userInputService = game:GetService("UserInputService")
 
 -- Constants.
 local LOCAL_PLAYER = playersService.LocalPlayer
@@ -202,16 +204,17 @@ local function loadNetRemotes()
 		state.shakeStartRF = Net:RemoteFunction("LureShake/Start")
 
 		-- Intercept ShakeStart to get seed args for humanized shake timing.
-		if state.shakeStartRF then
-			local ok2, orig = pcall(getcallbackvalue, state.shakeStartRF, "OnClientInvoke")
-			if ok2 and orig then
-				pcall(function()
+		-- Wrapped safely — if this fails or causes issues, shake falls back to other methods.
+		if state.shakeStartRF and type(getcallbackvalue) == "function" then
+			pcall(function()
+				local orig = getcallbackvalue(state.shakeStartRF, "OnClientInvoke")
+				if type(orig) == "function" then
 					state.shakeStartRF.OnClientInvoke = function(args)
 						state.shakeArgs = args
 						return orig(args)
 					end
-				end)
-			end
+				end
+			end)
 		end
 
 		-- Load ReelController.
@@ -779,22 +782,29 @@ local function installSafetyHooks()
 			return state.oldNamecall(self, ...)
 		end)
 
-		-- __index: spoof WalkSpeed/JumpPower reads.
+		-- __index: spoof WalkSpeed/JumpPower reads (local player only).
 		if config.spoofProperties then
 			meta.__index = newcclosure(function(self, index)
 				if not checkcaller() and self and index then
 					if typeof(self) == "Instance" and self:IsA("Humanoid") then
-						if index == "WalkSpeed" then return DEFAULT_WALK_SPEED end
-						if index == "JumpPower" then return DEFAULT_JUMP_POWER end
-						if index == "JumpHeight" then return 7.2 end
+						-- Only spoof our own humanoid to avoid breaking other systems.
+						local char = LOCAL_PLAYER.Character
+						if char and self:IsDescendantOf(char) then
+							if index == "WalkSpeed" then return DEFAULT_WALK_SPEED end
+							if index == "JumpPower" then return DEFAULT_JUMP_POWER end
+							if index == "JumpHeight" then return 7.2 end
+						end
 					end
 				end
 				return state.oldIndex(self, index)
 			end)
 		end
 
-		-- __newindex: block game resetting our properties.
-		if config.spoofProperties then
+		-- __newindex: DISABLED by default — blocking WalkSpeed/JumpPower writes
+		-- causes "invalid client" because server verifies the values changed.
+		-- Set SPOOF_NEWINDEX = true to enable at your own risk.
+		local SPOOF_NEWINDEX = false
+		if SPOOF_NEWINDEX and config.spoofProperties then
 			meta.__newindex = newcclosure(function(self, index, value)
 				if not checkcaller() and self and index then
 					if typeof(self) == "Instance" and self:IsA("Humanoid") then
@@ -851,13 +861,16 @@ local function onMainError(error)
 	unload()
 end
 
----Delta-specific anti-cheat scan: walk GC for suspicious AC tables/functions.
+---Anti-cheat scan: DISABLED by default — too aggressive, causes "invalid client".
+---Only enable if you know what you're doing and accept the risk.
+local AC_SCANNER_ENABLED = false
+
 local function scanForAntiCheat()
+	if not AC_SCANNER_ENABLED then return end
 	if type(getgc) ~= "function" then return end
 	pcall(function()
 		for _, v in ipairs(getgc(true)) do
 			if typeof(v) == "table" then
-				-- Look for common AC table patterns.
 				local detected = rawget(v, "Detected")
 				local kill = rawget(v, "Kill")
 				if type(detected) == "function" then
