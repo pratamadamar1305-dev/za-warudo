@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v5.1 — Delta Executor Edition
+    Fisch Byte v5.2 — Delta Executor Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v5.2 - All hooks OFF by default (prevents kick), optional enable
     v5.1 - Fixed "invalid client" kick (removed aggressive hooks)
     v5.0 - Split features, Rayfield UI, Delta optimization
     v4.0 - Safety hooks, Net module, humanize
@@ -107,9 +108,9 @@ local config = {
 	autoSell = false,
 	sellInterval = 10,
 	autoAppraise = false,
-	antiAFK = true,
-	antiKick = true,
-	spoofProperties = true,
+	antiAFK = false,
+	antiKick = false,
+	spoofProperties = false,
 	humanizeDelays = true,
 	freezeWhileFishing = false,
 	fishESP = false,
@@ -660,6 +661,11 @@ local function watchBobbers()
 end
 
 local function installSafetyHooks()
+	-- Skip ALL hooks if none are enabled (prevents "invalid client" kick).
+	if not config.antiKick and not config.antiAFK and not config.spoofProperties then
+		return
+	end
+
 	pcall(function()
 		local meta = getrawmetatable(game)
 		if not meta then return end
@@ -827,7 +833,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v5.1 | " .. platformLabel,
+		Name = "Fisch v5.2 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v5" },
@@ -915,19 +921,33 @@ local function initializeScript()
 	-- ==================== SAFETY TAB ====================
 	local SafetyTab = Window:CreateTab("Safety", 4370318776)
 
-	SafetyTab:CreateSection("Protection")
-	SafetyTab:CreateToggle({
-		Name = "Anti Kick", CurrentValue = true, Flag = "AntiKick",
-		Callback = function(v) config.antiKick = v end,
+	SafetyTab:CreateSection("⚠️ Hooks (may cause kick)")
+	SafetyTab:CreateParagraph({
+		Title = "Warning",
+		Content = "Enabling hooks installs metamethod hooks.\nThis can trigger anti-cheat detection.\nOnly enable on alt accounts!",
 	})
 	SafetyTab:CreateToggle({
-		Name = "Anti AFK", CurrentValue = true, Flag = "AntiAFK",
-		Callback = function(v) config.antiAFK = v end,
+		Name = "Anti Kick (hook)", CurrentValue = false, Flag = "AntiKick",
+		Callback = function(v)
+			config.antiKick = v
+			if v then installSafetyHooks() end
+		end,
 	})
 	SafetyTab:CreateToggle({
-		Name = "Spoof WalkSpeed / JumpPower", CurrentValue = true, Flag = "SpoofProps",
-		Callback = function(v) config.spoofProperties = v end,
+		Name = "Anti AFK (hook)", CurrentValue = false, Flag = "AntiAFK",
+		Callback = function(v)
+			config.antiAFK = v
+			if v then installSafetyHooks() end
+		end,
 	})
+	SafetyTab:CreateToggle({
+		Name = "Spoof WalkSpeed / JP (hook)", CurrentValue = false, Flag = "SpoofProps",
+		Callback = function(v)
+			config.spoofProperties = v
+			if v then installSafetyHooks() end
+		end,
+	})
+	SafetyTab:CreateSection("Safe (no hooks)")
 	SafetyTab:CreateToggle({
 		Name = "Humanize Delays", CurrentValue = true, Flag = "Humanize",
 		Callback = function(v) config.humanizeDelays = v end,
@@ -982,7 +1002,7 @@ local function initializeScript()
 
 	-- Startup notification.
 	Rayfield:Notify({
-		Title = "Fisch Byte v5.1",
+		Title = "Fisch Byte v5.2",
 		Content = "Delta optimized | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5, Image = 4483362458,
 	})
