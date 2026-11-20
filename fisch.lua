@@ -1,28 +1,39 @@
--- Check for shared table.
+--[[
+    Fisch Byte v5.1 — Delta Executor Edition
+    Auto Cast | Auto Shake | Auto Reel | Safety Hooks
+    
+    Optimized for Delta (sUNC 98%, mobile-first)
+    UI: Rayfield Library
+    
+    Changelog:
+    v5.1 - Fixed "invalid client" kick (removed aggressive hooks)
+    v5.0 - Split features, Rayfield UI, Delta optimization
+    v4.0 - Safety hooks, Net module, humanize
+    v3.0 - Triple shake/reel methods, mobile fix
+    v2.0 - Research-based remote paths
+    v1.0 - Initial script
+]]
+
+-- Guard: shared table check.
 if not shared then
 	return warn("No shared, no script.")
 end
 
--- Prevent double execution.
+-- Guard: double execution.
 if shared.FischByteLoaded then
 	return warn("[Fisch] Already running.")
 end
 shared.FischByteLoaded = true
 
 -- ============================================================
--- DELTA EXECUTOR OPTIMIZATION
--- Delta sUNC: 98% | Mobile-first executor
--- Confirmed support: getsenv, getcallbackvalue, gethui,
--- hookmetamethod, newcclosure, setupvalue, getupvalue,
--- firesignal, getgc, cloneref, setthreadidentity, getconnections
+-- DELTA EXECUTOR COMPATIBILITY
 -- ============================================================
 
--- Thread identity: only set if needed for Net module require.
--- Disabled by default — "invalid client" kick risk.
--- Uncomment if Net module fails to load:
+-- Thread identity: disabled by default to prevent "invalid client".
+-- Uncomment ONLY if Net module require fails:
 -- pcall(function() setthreadidentity(8) end)
 
--- Delta compatibility check: verify critical functions exist.
+-- Check which executor functions are available.
 local DELTA_COMPAT = {
 	hookmetamethod = type(hookmetamethod) == "function",
 	newcclosure = type(newcclosure) == "function",
@@ -36,30 +47,26 @@ local DELTA_COMPAT = {
 	getupvalue = type(getupvalue) == "function",
 	firesignal = type(firesignal) == "function",
 	gethui = type(gethui) == "function",
-	cloneref = type(cloneref) == "function",
 	getgc = type(getgc) == "function",
 	hookfunction = type(hookfunction) == "function",
 }
 
--- Fallback wrappers for missing functions.
+-- Fallback wrappers so the script doesn't crash on missing functions.
 if not DELTA_COMPAT.newcclosure then
 	getfenv().newcclosure = function(f) return f end
 end
-if not DELTA_COMPAT.cloneref then
-	getfenv().cloneref = function(inst) return inst end
-end
 if not DELTA_COMPAT.firesignal then
 	getfenv().firesignal = function(signal, ...)
-		if signal and type(signal.Fire) == "function" then
-			signal:Fire(...)
-		end
+		if signal and type(signal.Fire) == "function" then signal:Fire(...) end
 	end
 end
 if not DELTA_COMPAT.gethui then
 	getfenv().gethui = function() return nil end
 end
 
--- Services (normal references — cloneref can trigger "invalid client").
+-- ============================================================
+-- SERVICES (normal references — no cloneref to avoid detection)
+-- ============================================================
 local playersService = game:GetService("Players")
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local runService = game:GetService("RunService")
@@ -69,55 +76,43 @@ local collectionService = game:GetService("CollectionService")
 local guiService = game:GetService("GuiService")
 local userInputService = game:GetService("UserInputService")
 
--- Constants.
+-- ============================================================
+-- CONSTANTS
+-- ============================================================
 local LOCAL_PLAYER = playersService.LocalPlayer
 local PLAYER_GUI = LOCAL_PLAYER:WaitForChild("PlayerGui")
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
 local MERCHANT_NAME = "Marc Merchant"
 local MAX_SESSION_HOURS = 4
-
--- Platform detection.
 local IS_MOBILE = userInputService.TouchEnabled
+local ESP_UPDATE_INTERVAL = 2
 
--- Humanized random.
+-- Humanized random delay.
 local function rng(min, max)
 	return min + math.random() * (max - min)
 end
 
 -- ============================================================
--- CONFIG — each feature is independent
+-- CONFIG (each feature is independent)
 -- ============================================================
 local config = {
-	-- Fishing (separate toggles).
 	autoCast = false,
 	autoShake = false,
 	autoReel = false,
-
-	-- Cast settings.
 	castPower = 100,
 	perfectCast = false,
-
-	-- Reel settings.
-	reelMode = "legit", -- "legit" or "instant"
-
-	-- Shake settings.
+	reelMode = "legit",
 	shakeSpeed = 0.05,
-
-	-- Selling.
 	autoSell = false,
 	sellInterval = 10,
 	autoAppraise = false,
-
-	-- Safety.
 	antiAFK = true,
 	antiKick = true,
 	spoofProperties = true,
 	humanizeDelays = true,
 	freezeWhileFishing = false,
 	fishESP = false,
-
-	-- Mobile.
 	shakeMethod = "auto",
 }
 
@@ -134,10 +129,7 @@ local state = {
 	frozenCFrame = nil,
 	oldNamecall = nil,
 	oldIndex = nil,
-	oldNewindex = nil,
 	sessionStart = os.clock(),
-
-	-- Net module refs (Nexus Hub v4 pattern).
 	netCast = nil,
 	netReset = nil,
 	netShake = nil,
@@ -145,8 +137,6 @@ local state = {
 	shakeArgs = nil,
 	reelController = nil,
 }
-
-local ESP_UPDATE_INTERVAL = 2
 
 -- ============================================================
 -- UTILITY
@@ -164,33 +154,27 @@ local function unload()
 	config.autoCast = false
 	config.autoShake = false
 	config.autoReel = false
-	for _, conn in ipairs(state.connections) do
-		safeDisconnect(conn)
-	end
+	for _, conn in ipairs(state.connections) do safeDisconnect(conn) end
 	table.clear(state.connections)
-	for _, obj in ipairs(state.espObjects) do
-		pcall(function() obj:Destroy() end)
-	end
+	for _, obj in ipairs(state.espObjects) do pcall(function() obj:Destroy() end) end
 	table.clear(state.espObjects)
+	-- Restore hooks.
 	pcall(function()
 		local meta = getrawmetatable(game)
 		if not meta then return end
 		setreadonly(meta, false)
 		if state.oldNamecall then meta.__namecall = state.oldNamecall end
 		if state.oldIndex then meta.__index = state.oldIndex end
-		if state.oldNewindex then meta.__newindex = state.oldNewindex end
 		setreadonly(meta, true)
 	end)
 	shared.FischByteLoaded = nil
-	-- Restore thread identity on unload.
-	pcall(function() setthreadidentity(8) end)
 end
 
 -- ============================================================
 -- NET MODULE LOADING (Nexus Hub v4 pattern)
 -- ============================================================
 local function loadNetRemotes()
-	local ok, err = pcall(function()
+	pcall(function()
 		local packages = replicatedStorage:FindFirstChild("packages")
 		if not packages then return end
 		local netModule = packages:FindFirstChild("Net")
@@ -203,8 +187,7 @@ local function loadNetRemotes()
 		state.netShake = Net:RemoteEvent("LureShake/Shake")
 		state.shakeStartRF = Net:RemoteFunction("LureShake/Start")
 
-		-- Intercept ShakeStart to get seed args for humanized shake timing.
-		-- Wrapped safely — if this fails or causes issues, shake falls back to other methods.
+		-- Intercept ShakeStart for seed-based humanized shake.
 		if state.shakeStartRF and type(getcallbackvalue) == "function" then
 			pcall(function()
 				local orig = getcallbackvalue(state.shakeStartRF, "OnClientInvoke")
@@ -217,19 +200,16 @@ local function loadNetRemotes()
 			end)
 		end
 
-		-- Load ReelController.
+		-- Load ReelController for legit reel bar lock.
 		local client = replicatedStorage:FindFirstChild("client")
 		if client then
 			local controllers = client:FindFirstChild("legacyControllers")
 			if controllers then
 				local reelMod = controllers:FindFirstChild("ReelController")
-				if reelMod then
-					state.reelController = require(reelMod)
-				end
+				if reelMod then state.reelController = require(reelMod) end
 			end
 		end
 	end)
-	if not ok then logError("loadNetRemotes", err) end
 end
 
 -- ============================================================
@@ -258,9 +238,7 @@ local function resetRod(rod)
 		return
 	end
 	local resetEvent = rod:FindFirstChild("events") and rod.events:FindFirstChild("reset")
-	if resetEvent then
-		pcall(function() resetEvent:FireServer() end)
-	end
+	if resetEvent then pcall(function() resetEvent:FireServer() end) end
 end
 
 -- ============================================================
@@ -305,59 +283,37 @@ local castThread = nil
 local function autoCastLoop()
 	while state.running and config.autoCast do
 		local rod = getEquippedRod()
-		if not rod then
-			task.wait(1)
-			continue
-		end
+		if not rod then task.wait(1); continue end
 
-		-- If bobber is out or already casted, reset first.
+		-- Reset if bobber out or already casted.
 		if rod:FindFirstChild("bobber") or (rod.values and rod.values.casted and rod.values.casted.Value) then
 			resetRod(rod)
-			if config.humanizeDelays then
-				task.wait(rng(0.2, 0.5))
-			else
-				task.wait(0.3)
-			end
+			task.wait(config.humanizeDelays and rng(0.2, 0.5) or 0.3)
 		end
 
-		-- Check lure value.
+		-- Check lure value before casting.
 		local lure = getLureValue(rod)
-		if lure and lure.Value > 0.001 then
-			task.wait(0.1)
-			continue
-		end
+		if lure and lure.Value > 0.001 then task.wait(0.1); continue end
 
 		-- Cast via Net module or fallback.
 		local casted = false
 		if state.netCast then
 			local ok, result = pcall(function()
-				return state.netCast:InvokeServer(
-					math.clamp(config.castPower, 0, 100),
-					config.perfectCast
-				)
+				return state.netCast:InvokeServer(math.clamp(config.castPower, 0, 100), config.perfectCast)
 			end)
-			if ok and result == true then
-				casted = true
-			end
+			if ok and result == true then casted = true end
 		end
 
 		if not casted then
 			local castEvent = rod:FindFirstChild("events") and rod.events:FindFirstChild("cast")
 			if castEvent then
-				local ok = pcall(function() castEvent:FireServer(100, 1) end)
-				if ok then casted = true end
+				if pcall(function() castEvent:FireServer(100, 1) end) then casted = true end
 			end
 		end
 
 		if casted then
-			if config.freezeWhileFishing then
-				setCharacterFrozen(true)
-			end
-			if config.humanizeDelays then
-				task.wait(rng(0.4, 0.8))
-			else
-				task.wait(0.5)
-			end
+			if config.freezeWhileFishing then setCharacterFrozen(true) end
+			task.wait(config.humanizeDelays and rng(0.4, 0.8) or 0.5)
 		else
 			task.wait(1)
 		end
@@ -370,53 +326,47 @@ local function startAutoCast()
 end
 
 -- ============================================================
--- AUTO SHAKE (independent loop — works alongside manual casting)
+-- AUTO SHAKE (independent loop)
 -- ============================================================
 local shakeThread = nil
 
----Shake via firesignal (mobile-safe).
-local function doShakeFiresignal()
+local function getShakeButton()
 	local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-	if not shakeui then return false end
-	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then return false end
+	if not shakeui then return nil end
+	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then return nil end
 	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then return false end
+	if not safezone then return nil end
 	local button = safezone:FindFirstChild("button")
-	if not button or not button.Visible then return false end
+	if not button or not button.Visible then return nil end
+	return button
+end
+
+---Shake: firesignal (mobile-safe, no input simulation).
+local function doShakeFiresignal()
+	local button = getShakeButton()
+	if not button then return false end
 	return pcall(function() firesignal(button.MouseButton1Click) end)
 end
 
----Shake via mouse click (mobile-safe).
+---Shake: mouse click (mobile-safe).
 local function doShakeMouse()
-	local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-	if not shakeui then return false end
-	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then return false end
-	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then return false end
-	local button = safezone:FindFirstChild("button")
-	if not button or not button.Visible then return false end
-	if button.Size ~= UDim2.new(2, 0, 2, 0) then
-		button.Size = UDim2.new(2, 0, 2, 0)
-	end
-	local posX = button.AbsolutePosition.X + button.AbsoluteSize.X / 2
-	local posY = button.AbsolutePosition.Y + button.AbsoluteSize.Y / 2
-	if posX <= 0 and posY <= 0 then return false end
-	virtualInputManager:SendMouseButtonEvent(posX, posY, 0, true, game, 1)
-	virtualInputManager:SendMouseButtonEvent(posX, posY, 0, false, game, 1)
+	local button = getShakeButton()
+	if not button then return false end
+	if button.Size ~= UDim2.new(2, 0, 2, 0) then button.Size = UDim2.new(2, 0, 2, 0) end
+	local px = button.AbsolutePosition.X + button.AbsoluteSize.X / 2
+	local py = button.AbsolutePosition.Y + button.AbsoluteSize.Y / 2
+	if px <= 0 and py <= 0 then return false end
+	virtualInputManager:SendMouseButtonEvent(px, py, 0, true, game, 1)
+	virtualInputManager:SendMouseButtonEvent(px, py, 0, false, game, 1)
 	return true
 end
 
----Shake via Net module remote (mobile-safe).
+---Shake: direct remote fire (mobile-safe).
 local function doShakeRemote()
 	if state.netShake then
-		local ok = pcall(function() state.netShake:FireServer() end)
-		if ok then return true end
+		if pcall(function() state.netShake:FireServer() end) then return true end
 	end
-	local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-	if not shakeui then return false end
-	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then return false end
-	local button = safezone:FindFirstChild("button")
+	local button = getShakeButton()
 	if not button then return false end
 	local shakeRemote = button:FindFirstChild("shake")
 	if shakeRemote and shakeRemote:IsA("RemoteEvent") then
@@ -425,15 +375,11 @@ local function doShakeRemote()
 	return false
 end
 
----Shake via keyboard (PC ONLY).
+---Shake: keyboard Return key (PC ONLY — triggers platform detection on mobile).
 local function doShakeKeyboard()
 	if IS_MOBILE then return false end
-	local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-	if not shakeui then return false end
-	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then return false end
-	local button = safezone:FindFirstChild("button")
-	if not button or not button.Visible then return false end
+	local button = getShakeButton()
+	if not button then return false end
 	guiService.SelectedObject = button
 	if guiService.SelectedObject == button then
 		virtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
@@ -443,13 +389,12 @@ local function doShakeKeyboard()
 	return false
 end
 
----Nexus Hub v4 seed-based shake (most humanized).
+---Shake: seed-based from Nexus Hub v4 (most humanized).
 local function doShakeSeedBased()
 	if not state.shakeArgs then return false end
 	local args = state.shakeArgs
 	state.shakeArgs = nil
-
-	local ok = pcall(function()
+	return pcall(function()
 		local rngObj = Random.new(args.seed)
 		local scale = args.ShakeScale or 1
 		local cooldown = 0.25 / scale
@@ -459,7 +404,6 @@ local function doShakeSeedBased()
 			acc = acc - rngObj:NextNumber(0.5, 1.5)
 			needed = needed + 1
 		end
-		-- Humanized initial delay.
 		task.wait(math.random(35, 60) / 100)
 		for i = 1, needed do
 			if not config.autoShake then break end
@@ -471,14 +415,11 @@ local function doShakeSeedBased()
 			task.wait(cooldown + math.random(30, 80) / 1000)
 		end
 	end)
-	return ok
 end
 
----Perform shake with best method for platform.
+---Perform shake using the best method for the platform.
 local function doShake()
-	-- Try seed-based shake first (most humanized, from Nexus Hub v4).
 	if doShakeSeedBased() then return true end
-
 	local method = config.shakeMethod
 	if method == "auto" then
 		if IS_MOBILE then
@@ -501,15 +442,9 @@ end
 
 local function autoShakeLoop()
 	while state.running and config.autoShake do
-		local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-		if shakeui then
-			local shook = doShake()
-			if shook then
-				if config.humanizeDelays then
-					task.wait(rng(config.shakeSpeed * 0.7, config.shakeSpeed * 1.3))
-				else
-					task.wait(config.shakeSpeed)
-				end
+		if PLAYER_GUI:FindFirstChild("shakeui") then
+			if doShake() then
+				task.wait(config.humanizeDelays and rng(config.shakeSpeed * 0.7, config.shakeSpeed * 1.3) or config.shakeSpeed)
 			else
 				task.wait(0.05)
 			end
@@ -525,7 +460,7 @@ local function startAutoShake()
 end
 
 -- ============================================================
--- AUTO REEL (independent — works alongside manual fishing)
+-- AUTO REEL (independent loop)
 -- ============================================================
 local reelThread = nil
 
@@ -535,32 +470,25 @@ local function findReelFinishedRemote()
 	return events:FindFirstChild("reelfinished") or events:FindFirstChild("reelfinished ")
 end
 
----Solve reel using ReelController (Nexus Hub v4 pattern).
+---Reel via ReelController (Nexus Hub v4 pattern).
 local function solveReelController(reel)
 	if not reel then return false end
-
 	if config.reelMode == "instant" then
-		-- Wait for ready then end minigame.
 		local t0 = os.clock()
-		while not reel.ready and os.clock() - t0 < 15 do
-			task.wait(0.05)
-		end
+		while not reel.ready and os.clock() - t0 < 15 do task.wait(0.05) end
 		if state.reelController.ActiveReel == reel then
-			local ok = pcall(function() reel:EndMinigame(true) end)
-			return ok
+			return pcall(function() reel:EndMinigame(true) end)
 		end
 	else
-		-- Legit mode: bar lock runs in RenderStepped, just wait.
+		-- Legit: bar lock runs in Heartbeat, just wait for minigame to finish.
 		local t0 = os.clock()
-		while state.reelController.ActiveReel == reel and os.clock() - t0 < 180 do
-			task.wait(0.1)
-		end
+		while state.reelController.ActiveReel == reel and os.clock() - t0 < 180 do task.wait(0.1) end
 		return true
 	end
 	return false
 end
 
----Solve reel via upvalue manipulation.
+---Reel via upvalue manipulation (fallback).
 local function solveReelUpvalue()
 	local reelGui = PLAYER_GUI:FindFirstChild("reel")
 	if not reelGui then return false end
@@ -569,35 +497,30 @@ local function solveReelUpvalue()
 	local reelClient = bar:FindFirstChild("reel")
 	if not reelClient then return false end
 	if reelClient.Disabled then reelClient.Disabled = false end
-
 	return pcall(function()
 		local env = getsenv(reelClient)
 		if not env then return end
 		local updateColors = env.UpdateColors
 		if not updateColors then return end
 		setupvalue(updateColors, 1, 100)
-		local reelfinished = findReelFinishedRemote()
-		if reelfinished then
-			reelfinished:FireServer(getupvalue(updateColors, 1), true)
-		end
+		local rf = findReelFinishedRemote()
+		if rf then rf:FireServer(getupvalue(updateColors, 1), true) end
 	end)
 end
 
----Solve reel via simple remote fire.
+---Reel via simple remote fire (last resort).
 local function solveReelSimple()
-	local reelfinished = findReelFinishedRemote()
-	if not reelfinished then return false end
-	return pcall(function() reelfinished:FireServer(100, true) end)
+	local rf = findReelFinishedRemote()
+	if not rf then return false end
+	return pcall(function() rf:FireServer(100, true) end)
 end
 
 local function autoReelLoop()
 	while state.running and config.autoReel do
-		-- Check for active reel via ReelController.
 		if state.reelController and state.reelController.ActiveReel then
-			local reel = state.reelController.ActiveReel
-			solveReelController(reel)
+			solveReelController(state.reelController.ActiveReel)
 
-			-- Post-reel actions.
+			-- Post-reel: sell + appraise.
 			state.sellCounter = state.sellCounter + 1
 			if config.autoSell and state.sellCounter >= config.sellInterval then
 				task.wait(0.3)
@@ -609,13 +532,10 @@ local function autoReelLoop()
 					local merchant = npcs:FindFirstChild(MERCHANT_NAME)
 					if not merchant then return end
 					local sellall = merchant:FindFirstChild("merchant") and merchant.merchant:FindFirstChild("sellall")
-					if sellall and sellall:IsA("RemoteFunction") then
-						sellall:InvokeServer()
-					end
+					if sellall and sellall:IsA("RemoteFunction") then sellall:InvokeServer() end
 				end)
 				state.sellCounter = 0
 			end
-
 			if config.autoAppraise then
 				task.wait(0.2)
 				pcall(function()
@@ -627,12 +547,7 @@ local function autoReelLoop()
 					elseif appraise:IsA("RemoteEvent") then appraise:FireServer() end
 				end)
 			end
-
-			if config.humanizeDelays then
-				task.wait(rng(0.3, 0.8))
-			else
-				task.wait(0.5)
-			end
+			task.wait(config.humanizeDelays and rng(0.3, 0.8) or 0.5)
 		else
 			task.wait(0.1)
 		end
@@ -726,18 +641,17 @@ local function spearFishAutoFarm()
 end
 
 -- ============================================================
--- SAFETY HOOKS
+-- SAFETY HOOKS (lightweight — only __namecall + __index)
 -- ============================================================
 local function watchBobbers()
 	table.insert(state.connections, workspace.DescendantAdded:Connect(function(d)
 		if not state.running then return end
 		if d:IsA("BasePart") and d.Name:lower():find("bobber") then
 			task.defer(function()
-				if d.Parent then
-					for _, desc in ipairs(d:GetDescendants()) do
-						if desc:IsA("Attachment") and (desc.Name == "bob" or desc.Name == "bodyweld") then
-							desc:Destroy()
-						end
+				if not d.Parent then return end
+				for _, desc in ipairs(d:GetDescendants()) do
+					if desc:IsA("Attachment") and (desc.Name == "bob" or desc.Name == "bodyweld") then
+						desc:Destroy()
 					end
 				end
 			end)
@@ -746,29 +660,31 @@ local function watchBobbers()
 end
 
 local function installSafetyHooks()
-	local ok, err = pcall(function()
+	pcall(function()
 		local meta = getrawmetatable(game)
 		if not meta then return end
 		setreadonly(meta, false)
 
 		state.oldNamecall = meta.__namecall
 		state.oldIndex = meta.__index
-		state.oldNewindex = meta.__newindex
 
-		-- __namecall: anti-kick, anti-AFK, spoof property signals.
+		-- __namecall: anti-kick + anti-AFK + spoof property signals.
 		meta.__namecall = newcclosure(function(self, ...)
 			local method = getnamecallmethod()
 			local args = {...}
 
+			-- Anti-kick: block Kick calls from game scripts.
 			if config.antiKick and not checkcaller() then
 				if method == "Kick" or method == "kick" then return end
 			end
 
+			-- Anti-AFK: spoof afk remote.
 			if config.antiAFK and method == "FireServer" and self.Name == "afk" then
 				args[1] = false
 				return state.oldNamecall(self, unpack(args))
 			end
 
+			-- Spoof GetPropertyChangedSignal for WalkSpeed/JumpPower.
 			if config.spoofProperties and not checkcaller() then
 				if method == "GetPropertyChangedSignal" then
 					local prop = args[1]
@@ -787,7 +703,6 @@ local function installSafetyHooks()
 			meta.__index = newcclosure(function(self, index)
 				if not checkcaller() and self and index then
 					if typeof(self) == "Instance" and self:IsA("Humanoid") then
-						-- Only spoof our own humanoid to avoid breaking other systems.
 						local char = LOCAL_PLAYER.Character
 						if char and self:IsDescendantOf(char) then
 							if index == "WalkSpeed" then return DEFAULT_WALK_SPEED end
@@ -800,30 +715,12 @@ local function installSafetyHooks()
 			end)
 		end
 
-		-- __newindex: DISABLED by default — blocking WalkSpeed/JumpPower writes
-		-- causes "invalid client" because server verifies the values changed.
-		-- Set SPOOF_NEWINDEX = true to enable at your own risk.
-		local SPOOF_NEWINDEX = false
-		if SPOOF_NEWINDEX and config.spoofProperties then
-			meta.__newindex = newcclosure(function(self, index, value)
-				if not checkcaller() and self and index then
-					if typeof(self) == "Instance" and self:IsA("Humanoid") then
-						if index == "WalkSpeed" or index == "JumpPower" or index == "JumpHeight" then
-							return
-						end
-					end
-				end
-				return state.oldNewindex(self, index, value)
-			end)
-		end
-
 		setreadonly(meta, true)
 	end)
-	if not ok then logError("installSafetyHooks", err) end
 end
 
 -- ============================================================
--- HEARTBEAT
+-- HEARTBEAT (anti-freeze + CFrame lock + ReelController bar lock)
 -- ============================================================
 local function onHeartbeat()
 	if not state.running then return end
@@ -856,41 +753,13 @@ end
 -- ============================================================
 -- ENTRY POINT
 -- ============================================================
-local function onMainError(error)
-	warn("[Fisch] Fatal:", error, debug.traceback())
+local function onMainError(err)
+	warn("[Fisch] Fatal:", err, debug.traceback())
 	unload()
 end
 
----Anti-cheat scan: DISABLED by default — too aggressive, causes "invalid client".
----Only enable if you know what you're doing and accept the risk.
-local AC_SCANNER_ENABLED = false
-
-local function scanForAntiCheat()
-	if not AC_SCANNER_ENABLED then return end
-	if type(getgc) ~= "function" then return end
-	pcall(function()
-		for _, v in ipairs(getgc(true)) do
-			if typeof(v) == "table" then
-				local detected = rawget(v, "Detected")
-				local kill = rawget(v, "Kill")
-				if type(detected) == "function" then
-					hookfunction(detected, function() end)
-				end
-				if type(kill) == "function" then
-					hookfunction(kill, function() end)
-				end
-			end
-		end
-	end)
-end
-
 local function initializeScript()
-	-- Delta supports setfpscap for FPS unlock on mobile.
 	pcall(function() setfpscap(9999) end)
-
-	-- Scan and neutralize anti-cheat functions via getgc (Delta supports this).
-	task.spawn(scanForAntiCheat)
-
 	task.spawn(loadNetRemotes)
 
 	-- Heartbeat.
@@ -913,7 +782,7 @@ local function initializeScript()
 		end
 	end))
 
-	-- Re-enable reel script.
+	-- Re-enable reel script if disabled.
 	table.insert(state.connections, PLAYER_GUI.DescendantAdded:Connect(function(d)
 		if d.Name == "reel" and d:IsA("LocalScript") and d.Disabled then d.Disabled = false end
 	end))
@@ -927,6 +796,7 @@ local function initializeScript()
 	watchBobbers()
 	installSafetyHooks()
 
+	-- Respawn handler.
 	LOCAL_PLAYER.CharacterAdded:Connect(function()
 		state.sellCounter = 0
 		state.biteEnded = false
@@ -938,12 +808,9 @@ local function initializeScript()
 	task.spawn(function()
 		while state.running do
 			task.wait(60)
-			local hours = (os.clock() - state.sessionStart) / 3600
-			if hours >= MAX_SESSION_HOURS then
-				warn("[Fisch] Session limit (" .. MAX_SESSION_HOURS .. "h). Auto-stopping.")
-				config.autoCast = false
-				config.autoShake = false
-				config.autoReel = false
+			if (os.clock() - state.sessionStart) / 3600 >= MAX_SESSION_HOURS then
+				warn("[Fisch] Session limit reached. Auto-stopping.")
+				config.autoCast = false; config.autoShake = false; config.autoReel = false
 				setCharacterFrozen(false)
 				break
 			end
@@ -960,14 +827,10 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v5.0 | " .. platformLabel,
+		Name = "Fisch v5.1 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
-		LoadingSubtitle = "Δ " .. compatCount .. "/15 compatible",
-		ConfigurationSaving = {
-			Enabled = true,
-			FolderName = "FischByte",
-			FileName = "Config_v5",
-		},
+		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
+		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v5" },
 		KeySystem = false,
 	})
 
@@ -977,139 +840,75 @@ local function initializeScript()
 	FishingTab:CreateSection("Auto Cast")
 
 	FishingTab:CreateToggle({
-		Name = "Enable Auto Cast",
-		CurrentValue = false,
-		Flag = "AutoCast",
-		Callback = function(v)
-			config.autoCast = v
-			if v then startAutoCast() end
-		end,
+		Name = "Enable Auto Cast", CurrentValue = false, Flag = "AutoCast",
+		Callback = function(v) config.autoCast = v; if v then startAutoCast() end end,
 	})
-
 	FishingTab:CreateToggle({
-		Name = "Perfect Cast (hook)",
-		CurrentValue = false,
-		Flag = "PerfectCast",
+		Name = "Perfect Cast (hook)", CurrentValue = false, Flag = "PerfectCast",
 		Callback = function(v) config.perfectCast = v end,
 	})
-
 	FishingTab:CreateSlider({
-		Name = "Cast Power",
-		Range = {10, 100},
-		Increment = 5,
-		Suffix = "%",
-		CurrentValue = 100,
-		Flag = "CastPower",
+		Name = "Cast Power", Range = {10, 100}, Increment = 5, Suffix = "%",
+		CurrentValue = 100, Flag = "CastPower",
 		Callback = function(v) config.castPower = v end,
 	})
-
 	FishingTab:CreateToggle({
-		Name = "Freeze While Casting",
-		CurrentValue = false,
-		Flag = "FreezeCast",
-		Callback = function(v)
-			config.freezeWhileFishing = v
-			if not v then setCharacterFrozen(false) end
-		end,
+		Name = "Freeze While Casting", CurrentValue = false, Flag = "FreezeCast",
+		Callback = function(v) config.freezeWhileFishing = v; if not v then setCharacterFrozen(false) end end,
 	})
 
 	FishingTab:CreateSection("Auto Shake")
 
 	FishingTab:CreateToggle({
-		Name = "Enable Auto Shake",
-		CurrentValue = false,
-		Flag = "AutoShake",
-		Callback = function(v)
-			config.autoShake = v
-			if v then startAutoShake() end
-		end,
+		Name = "Enable Auto Shake", CurrentValue = false, Flag = "AutoShake",
+		Callback = function(v) config.autoShake = v; if v then startAutoShake() end end,
 	})
-
-	local shakeOptions = IS_MOBILE
-		and {"auto", "firesignal", "mouse", "remote"}
-		or {"auto", "firesignal", "mouse", "remote", "keyboard"}
-
 	FishingTab:CreateDropdown({
 		Name = "Shake Method",
-		Options = shakeOptions,
-		CurrentOption = {"auto"},
-		Flag = "ShakeMethod",
-		Callback = function(opt)
-			config.shakeMethod = opt[1] or opt
-		end,
+		Options = IS_MOBILE and {"auto", "firesignal", "mouse", "remote"} or {"auto", "firesignal", "mouse", "remote", "keyboard"},
+		CurrentOption = {"auto"}, Flag = "ShakeMethod",
+		Callback = function(opt) config.shakeMethod = type(opt) == "table" and opt[1] or opt end,
 	})
-
 	FishingTab:CreateSlider({
-		Name = "Shake Speed (ms)",
-		Range = {1, 20},
-		Increment = 1,
-		Suffix = "ms",
-		CurrentValue = 5,
-		Flag = "ShakeSpeed",
+		Name = "Shake Speed (ms)", Range = {1, 20}, Increment = 1, Suffix = "ms",
+		CurrentValue = 5, Flag = "ShakeSpeed",
 		Callback = function(v) config.shakeSpeed = v / 100 end,
 	})
 
 	FishingTab:CreateSection("Auto Reel")
 
 	FishingTab:CreateToggle({
-		Name = "Enable Auto Reel",
-		CurrentValue = false,
-		Flag = "AutoReel",
-		Callback = function(v)
-			config.autoReel = v
-			if v then startAutoReel() end
-		end,
+		Name = "Enable Auto Reel", CurrentValue = false, Flag = "AutoReel",
+		Callback = function(v) config.autoReel = v; if v then startAutoReel() end end,
 	})
-
 	FishingTab:CreateDropdown({
-		Name = "Reel Mode",
-		Options = {"legit", "instant"},
-		CurrentOption = {"legit"},
-		Flag = "ReelMode",
-		Callback = function(opt)
-			config.reelMode = opt[1] or opt
-		end,
+		Name = "Reel Mode", Options = {"legit", "instant"},
+		CurrentOption = {"legit"}, Flag = "ReelMode",
+		Callback = function(opt) config.reelMode = type(opt) == "table" and opt[1] or opt end,
 	})
 
 	-- ==================== SELLING TAB ====================
 	local SellTab = Window:CreateTab("Selling", 4335470520)
 
 	SellTab:CreateSection("Auto Sell")
-
 	SellTab:CreateToggle({
-		Name = "Auto Sell",
-		CurrentValue = false,
-		Flag = "AutoSell",
+		Name = "Auto Sell", CurrentValue = false, Flag = "AutoSell",
 		Callback = function(v) config.autoSell = v end,
 	})
-
 	SellTab:CreateSlider({
-		Name = "Sell Every N Catches",
-		Range = {1, 50},
-		Increment = 1,
-		Suffix = " fish",
-		CurrentValue = 10,
-		Flag = "SellInterval",
+		Name = "Sell Every N Catches", Range = {1, 50}, Increment = 1, Suffix = " fish",
+		CurrentValue = 10, Flag = "SellInterval",
 		Callback = function(v) config.sellInterval = v end,
 	})
-
 	SellTab:CreateToggle({
-		Name = "Auto Appraise",
-		CurrentValue = false,
-		Flag = "AutoAppraise",
+		Name = "Auto Appraise", CurrentValue = false, Flag = "AutoAppraise",
 		Callback = function(v) config.autoAppraise = v end,
 	})
-
 	SellTab:CreateButton({
 		Name = "Sell All Fish Now",
 		Callback = function()
 			sellAll()
-			Rayfield:Notify({
-				Title = "Fisch Byte",
-				Content = "Sold all fish!",
-				Duration = 3,
-				Image = 4483362458,
-			})
+			Rayfield:Notify({ Title = "Fisch Byte", Content = "Sold all fish!", Duration = 3, Image = 4483362458 })
 		end,
 	})
 
@@ -1117,119 +916,75 @@ local function initializeScript()
 	local SafetyTab = Window:CreateTab("Safety", 4370318776)
 
 	SafetyTab:CreateSection("Protection")
-
 	SafetyTab:CreateToggle({
-		Name = "Anti Kick",
-		CurrentValue = true,
-		Flag = "AntiKick",
+		Name = "Anti Kick", CurrentValue = true, Flag = "AntiKick",
 		Callback = function(v) config.antiKick = v end,
 	})
-
 	SafetyTab:CreateToggle({
-		Name = "Anti AFK",
-		CurrentValue = true,
-		Flag = "AntiAFK",
+		Name = "Anti AFK", CurrentValue = true, Flag = "AntiAFK",
 		Callback = function(v) config.antiAFK = v end,
 	})
-
 	SafetyTab:CreateToggle({
-		Name = "Spoof WalkSpeed / JumpPower",
-		CurrentValue = true,
-		Flag = "SpoofProps",
+		Name = "Spoof WalkSpeed / JumpPower", CurrentValue = true, Flag = "SpoofProps",
 		Callback = function(v) config.spoofProperties = v end,
 	})
-
 	SafetyTab:CreateToggle({
-		Name = "Humanize Delays",
-		CurrentValue = true,
-		Flag = "Humanize",
+		Name = "Humanize Delays", CurrentValue = true, Flag = "Humanize",
 		Callback = function(v) config.humanizeDelays = v end,
 	})
-
 	SafetyTab:CreateSection("Status")
-
 	SafetyTab:CreateParagraph({
 		Title = "Delta Compatibility",
-		Content = compatCount .. "/15 functions supported\nPlatform: " .. platformLabel,
+		Content = compatCount .. "/14 functions supported\nPlatform: " .. platformLabel,
 	})
 
 	-- ==================== UTILITY TAB ====================
 	local UtilTab = Window:CreateTab("Utility", 4370345189)
 
 	UtilTab:CreateSection("Visual")
-
 	UtilTab:CreateToggle({
-		Name = "Fish ESP",
-		CurrentValue = false,
-		Flag = "FishESP",
-		Callback = function(v)
-			config.fishESP = v
-			if not v then clearESP() end
-		end,
+		Name = "Fish ESP", CurrentValue = false, Flag = "FishESP",
+		Callback = function(v) config.fishESP = v; if not v then clearESP() end end,
 	})
 
 	UtilTab:CreateSection("Teleport")
-
 	UtilTab:CreateButton({
 		Name = "Teleport to Nearest Bobber",
 		Callback = function()
 			teleportToNearestBobber()
-			Rayfield:Notify({
-				Title = "Fisch Byte",
-				Content = "Teleported to nearest bobber!",
-				Duration = 3,
-				Image = 4483362458,
-			})
+			Rayfield:Notify({ Title = "Fisch Byte", Content = "Teleported!", Duration = 3, Image = 4483362458 })
 		end,
 	})
-
 	UtilTab:CreateButton({
 		Name = "Spear Fish Auto Farm",
 		Callback = function()
 			spearFishAutoFarm()
-			Rayfield:Notify({
-				Title = "Fisch Byte",
-				Content = "Spear fishing triggered!",
-				Duration = 3,
-				Image = 4483362458,
-			})
+			Rayfield:Notify({ Title = "Fisch Byte", Content = "Spear fishing triggered!", Duration = 3, Image = 4483362458 })
 		end,
 	})
 
 	UtilTab:CreateSection("Character")
-
 	UtilTab:CreateButton({
 		Name = "Force Unfreeze",
 		Callback = function()
 			forceUnfreeze()
-			Rayfield:Notify({
-				Title = "Fisch Byte",
-				Content = "Character unfrozen!",
-				Duration = 3,
-				Image = 4483362458,
-			})
+			Rayfield:Notify({ Title = "Fisch Byte", Content = "Unfrozen!", Duration = 3, Image = 4483362458 })
 		end,
 	})
 
 	-- ==================== SCRIPT TAB ====================
 	local ScriptTab = Window:CreateTab("Script", 4483362458)
-
 	ScriptTab:CreateSection("Script")
-
 	ScriptTab:CreateButton({
 		Name = "Unload Script",
-		Callback = function()
-			Rayfield:Destroy()
-			unload()
-		end,
+		Callback = function() Rayfield:Destroy(); unload() end,
 	})
 
 	-- Startup notification.
 	Rayfield:Notify({
-		Title = "Fisch Byte v5.0",
-		Content = "Delta optimized | " .. compatCount .. "/15 compat | " .. platformLabel,
-		Duration = 5,
-		Image = 4483362458,
+		Title = "Fisch Byte v5.1",
+		Content = "Delta optimized | " .. compatCount .. "/14 compat | " .. platformLabel,
+		Duration = 5, Image = 4483362458,
 	})
 end
 
