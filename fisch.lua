@@ -938,208 +938,286 @@ local function initializeScript()
 	end)
 
 	-- ============================================================
-	-- GUI
+	-- GUI (Rayfield)
 	-- ============================================================
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "FischByteGUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	-- Delta supports gethui() — safest GUI parent (hidden from game scripts).
-	local guiParent = nil
-	pcall(function() guiParent = gethui() end)
-	if not guiParent then
-		pcall(function() guiParent = game:GetService("CoreGui") end)
-	end
-	if not guiParent then
-		guiParent = PLAYER_GUI
-	end
-	screenGui.Parent = guiParent
+	local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
 
-	local mainFrame = Instance.new("Frame")
-	mainFrame.Size = UDim2.new(0, 290, 0, 540)
-	mainFrame.Position = UDim2.new(0, 15, 0.5, -270)
-	mainFrame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
-	mainFrame.BorderSizePixel = 0; mainFrame.Active = true; mainFrame.Draggable = true
-	mainFrame.Parent = screenGui
-	local mc = Instance.new("UICorner"); mc.CornerRadius = UDim.new(0, 10); mc.Parent = mainFrame
-	local ms = Instance.new("UIStroke"); ms.Color = Color3.fromRGB(60, 60, 100); ms.Thickness = 1; ms.Parent = mainFrame
-
-	-- Title bar.
-	local titleBar = Instance.new("Frame")
-	titleBar.Size = UDim2.new(1, 0, 0, 36)
-	titleBar.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
-	titleBar.BorderSizePixel = 0; titleBar.Parent = mainFrame
-	Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 10)
-	local tf = Instance.new("Frame")
-	tf.Size = UDim2.new(1, 0, 0, 10); tf.Position = UDim2.new(0, 0, 1, -10)
-	tf.BackgroundColor3 = Color3.fromRGB(25, 25, 45); tf.BorderSizePixel = 0; tf.Parent = titleBar
-
-	local tl = Instance.new("TextLabel")
-	tl.Size = UDim2.new(1, -50, 1, 0); tl.Position = UDim2.new(0, 12, 0, 0)
-	tl.BackgroundTransparency = 1; tl.Text = "🎣 Fisch"
-	tl.TextColor3 = Color3.fromRGB(80, 180, 255); tl.TextSize = 16
-	tl.Font = Enum.Font.GothamBold; tl.TextXAlignment = Enum.TextXAlignment.Left; tl.Parent = titleBar
-
-	local pt = IS_MOBILE and "📱" or "🖥️"
 	local compatCount = 0
 	for _, v in pairs(DELTA_COMPAT) do if v then compatCount = compatCount + 1 end end
-	local vl = Instance.new("TextLabel")
-	vl.Size = UDim2.new(0, 100, 1, 0); vl.Position = UDim2.new(1, -110, 0, 0)
-	vl.BackgroundTransparency = 1
-	vl.Text = pt .. " Δ " .. compatCount .. "/15"
-	vl.TextColor3 = compatCount >= 13 and Color3.fromRGB(80, 200, 80) or Color3.fromRGB(255, 180, 50)
-	vl.TextSize = 11
-	vl.Font = Enum.Font.Gotham; vl.TextXAlignment = Enum.TextXAlignment.Right; vl.Parent = titleBar
-
-	local cb = Instance.new("TextButton")
-	cb.Size = UDim2.new(0, 28, 0, 28); cb.Position = UDim2.new(1, -32, 0, 4)
-	cb.BackgroundColor3 = Color3.fromRGB(200, 50, 50); cb.Text = "✕"
-	cb.TextColor3 = Color3.fromRGB(255, 255, 255); cb.TextSize = 14
-	cb.Font = Enum.Font.GothamBold; cb.Parent = titleBar
-	Instance.new("UICorner", cb).CornerRadius = UDim.new(0, 6)
-	cb.MouseButton1Click:Connect(function() screenGui:Destroy(); unload() end)
-
-	-- Scroll.
-	local scroll = Instance.new("ScrollingFrame")
-	scroll.Size = UDim2.new(1, -16, 1, -46); scroll.Position = UDim2.new(0, 8, 0, 40)
-	scroll.BackgroundTransparency = 1; scroll.ScrollBarThickness = 3
-	scroll.ScrollBarImageColor3 = Color3.fromRGB(60, 60, 100)
-	scroll.CanvasSize = UDim2.new(0, 0, 0, 0); scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	scroll.Parent = mainFrame
-	local ly = Instance.new("UIListLayout")
-	ly.Padding = UDim.new(0, 4); ly.SortOrder = Enum.SortOrder.LayoutOrder; ly.Parent = scroll
-
-	-- UI builders.
-	local function addSection(text)
-		local l = Instance.new("TextLabel")
-		l.Size = UDim2.new(1, -4, 0, 22); l.BackgroundTransparency = 1
-		l.Text = "  " .. text:upper(); l.TextColor3 = Color3.fromRGB(120, 120, 170)
-		l.TextSize = 11; l.Font = Enum.Font.GothamBold
-		l.TextXAlignment = Enum.TextXAlignment.Left; l.Parent = scroll
-	end
-
-	local function addToggle(label, default, callback)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, 0, 0, 30)
-		b.BackgroundColor3 = default and Color3.fromRGB(35, 110, 55) or Color3.fromRGB(40, 40, 60)
-		b.BorderSizePixel = 0; b.Text = ""; b.AutoButtonColor = false; b.Parent = scroll
-		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-		local ind = Instance.new("Frame")
-		ind.Size = UDim2.new(0, 8, 0, 8); ind.Position = UDim2.new(0, 10, 0.5, -4)
-		ind.BackgroundColor3 = default and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(100, 100, 100)
-		ind.Parent = b
-		Instance.new("UICorner", ind).CornerRadius = UDim.new(1, 0)
-		local t = Instance.new("TextLabel")
-		t.Size = UDim2.new(1, -30, 1, 0); t.Position = UDim2.new(0, 26, 0, 0)
-		t.BackgroundTransparency = 1; t.Text = label
-		t.TextColor3 = Color3.fromRGB(210, 210, 230); t.TextSize = 13
-		t.Font = Enum.Font.Gotham; t.TextXAlignment = Enum.TextXAlignment.Left; t.Parent = b
-		local a = default
-		b.MouseButton1Click:Connect(function()
-			a = not a
-			b.BackgroundColor3 = a and Color3.fromRGB(35, 110, 55) or Color3.fromRGB(40, 40, 60)
-			ind.BackgroundColor3 = a and Color3.fromRGB(80, 255, 120) or Color3.fromRGB(100, 100, 100)
-			callback(a)
-		end)
-		return b
-	end
-
-	local function addButton(label, callback)
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, 0, 0, 30); b.BackgroundColor3 = Color3.fromRGB(50, 50, 85)
-		b.BorderSizePixel = 0; b.Text = "  ▶ " .. label
-		b.TextColor3 = Color3.fromRGB(180, 200, 255); b.TextSize = 13
-		b.Font = Enum.Font.GothamMedium; b.TextXAlignment = Enum.TextXAlignment.Left; b.Parent = scroll
-		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-		b.MouseButton1Click:Connect(callback)
-	end
-
-	-- ============================================================
-	-- BUILD UI — separate features
-	-- ============================================================
-
-	addSection("Auto Cast")
-	addToggle("Enable Auto Cast", false, function(v)
-		config.autoCast = v
-		if v then startAutoCast() end
-	end)
-	addToggle("Perfect Cast (hook)", false, function(v) config.perfectCast = v end)
-	addToggle("Freeze While Casting", false, function(v)
-		config.freezeWhileFishing = v
-		if not v then setCharacterFrozen(false) end
-	end)
-
-	addSection("Auto Shake")
-	addToggle("Enable Auto Shake", false, function(v)
-		config.autoShake = v
-		if v then startAutoShake() end
-	end)
-
-	-- Shake method cycler (Delta-optimized: firesignal first, no keyboard on mobile).
-	local shakeMethods = IS_MOBILE and {"auto", "firesignal", "mouse", "remote"} or {"auto", "firesignal", "mouse", "remote", "keyboard"}
-	local shakeMethodIdx = 1
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
-	local smb = Instance.new("TextButton")
-	smb.Size = UDim2.new(1, 0, 0, 30); smb.BackgroundColor3 = Color3.fromRGB(50, 50, 85)
-	smb.BorderSizePixel = 0; smb.Text = "  Method: auto (" .. platformLabel .. ")"
-	smb.TextColor3 = Color3.fromRGB(180, 200, 255); smb.TextSize = 13
-	smb.Font = Enum.Font.GothamMedium; smb.TextXAlignment = Enum.TextXAlignment.Left; smb.Parent = scroll
-	Instance.new("UICorner", smb).CornerRadius = UDim.new(0, 6)
-	smb.MouseButton1Click:Connect(function()
-		shakeMethodIdx = shakeMethodIdx % #shakeMethods + 1
-		config.shakeMethod = shakeMethods[shakeMethodIdx]
-		local lbl = config.shakeMethod
-		if config.shakeMethod == "auto" then lbl = "auto (" .. platformLabel .. ")" end
-		if config.shakeMethod == "keyboard" then lbl = "keyboard (PC only!)" end
-		smb.Text = "  Method: " .. lbl
-	end)
 
-	addSection("Auto Reel")
-	addToggle("Enable Auto Reel", false, function(v)
-		config.autoReel = v
-		if v then startAutoReel() end
-	end)
+	local Window = Rayfield:CreateWindow({
+		Name = "Fisch v5.0 | " .. platformLabel,
+		LoadingTitle = "Fisch Byte",
+		LoadingSubtitle = "Δ " .. compatCount .. "/15 compatible",
+		ConfigurationSaving = {
+			Enabled = true,
+			FolderName = "FischByte",
+			FileName = "Config_v5",
+		},
+		KeySystem = false,
+	})
 
-	-- Reel mode cycler.
-	local reelModes = {"legit", "instant"}
-	local reelModeIdx = 1
-	local rmb = Instance.new("TextButton")
-	rmb.Size = UDim2.new(1, 0, 0, 30); rmb.BackgroundColor3 = Color3.fromRGB(50, 50, 85)
-	rmb.BorderSizePixel = 0; rmb.Text = "  Reel Mode: legit (safer)"
-	rmb.TextColor3 = Color3.fromRGB(180, 200, 255); rmb.TextSize = 13
-	rmb.Font = Enum.Font.GothamMedium; rmb.TextXAlignment = Enum.TextXAlignment.Left; rmb.Parent = scroll
-	Instance.new("UICorner", rmb).CornerRadius = UDim.new(0, 6)
-	rmb.MouseButton1Click:Connect(function()
-		reelModeIdx = reelModeIdx % #reelModes + 1
-		config.reelMode = reelModes[reelModeIdx]
-		local lbl = config.reelMode
-		if config.reelMode == "legit" then lbl = "legit (safer)" end
-		if config.reelMode == "instant" then lbl = "instant (risky!)" end
-		rmb.Text = "  Reel Mode: " .. lbl
-	end)
+	-- ==================== FISHING TAB ====================
+	local FishingTab = Window:CreateTab("Fishing", 4483362458)
 
-	addSection("Selling")
-	addToggle("Auto Sell", false, function(v) config.autoSell = v end)
-	addToggle("Auto Appraise", false, function(v) config.autoAppraise = v end)
-	addButton("Sell All Now", sellAll)
+	FishingTab:CreateSection("Auto Cast")
 
-	addSection("Safety")
-	addToggle("Anti Kick", true, function(v) config.antiKick = v end)
-	addToggle("Anti AFK", true, function(v) config.antiAFK = v end)
-	addToggle("Spoof WalkSpeed/JP", true, function(v) config.spoofProperties = v end)
-	addToggle("Humanize Delays", true, function(v) config.humanizeDelays = v end)
+	FishingTab:CreateToggle({
+		Name = "Enable Auto Cast",
+		CurrentValue = false,
+		Flag = "AutoCast",
+		Callback = function(v)
+			config.autoCast = v
+			if v then startAutoCast() end
+		end,
+	})
 
-	addSection("Utility")
-	addToggle("Fish ESP", false, function(v)
-		config.fishESP = v
-		if not v then clearESP() end
-	end)
-	addButton("Teleport to Bobber", teleportToNearestBobber)
-	addButton("Spear Fish Farm", spearFishAutoFarm)
-	addButton("Force Unfreeze", forceUnfreeze)
+	FishingTab:CreateToggle({
+		Name = "Perfect Cast (hook)",
+		CurrentValue = false,
+		Flag = "PerfectCast",
+		Callback = function(v) config.perfectCast = v end,
+	})
 
-	addSection("Script")
-	addButton("Unload Script", function() screenGui:Destroy(); unload() end)
+	FishingTab:CreateSlider({
+		Name = "Cast Power",
+		Range = {10, 100},
+		Increment = 5,
+		Suffix = "%",
+		CurrentValue = 100,
+		Flag = "CastPower",
+		Callback = function(v) config.castPower = v end,
+	})
+
+	FishingTab:CreateToggle({
+		Name = "Freeze While Casting",
+		CurrentValue = false,
+		Flag = "FreezeCast",
+		Callback = function(v)
+			config.freezeWhileFishing = v
+			if not v then setCharacterFrozen(false) end
+		end,
+	})
+
+	FishingTab:CreateSection("Auto Shake")
+
+	FishingTab:CreateToggle({
+		Name = "Enable Auto Shake",
+		CurrentValue = false,
+		Flag = "AutoShake",
+		Callback = function(v)
+			config.autoShake = v
+			if v then startAutoShake() end
+		end,
+	})
+
+	local shakeOptions = IS_MOBILE
+		and {"auto", "firesignal", "mouse", "remote"}
+		or {"auto", "firesignal", "mouse", "remote", "keyboard"}
+
+	FishingTab:CreateDropdown({
+		Name = "Shake Method",
+		Options = shakeOptions,
+		CurrentOption = {"auto"},
+		Flag = "ShakeMethod",
+		Callback = function(opt)
+			config.shakeMethod = opt[1] or opt
+		end,
+	})
+
+	FishingTab:CreateSlider({
+		Name = "Shake Speed (ms)",
+		Range = {1, 20},
+		Increment = 1,
+		Suffix = "ms",
+		CurrentValue = 5,
+		Flag = "ShakeSpeed",
+		Callback = function(v) config.shakeSpeed = v / 100 end,
+	})
+
+	FishingTab:CreateSection("Auto Reel")
+
+	FishingTab:CreateToggle({
+		Name = "Enable Auto Reel",
+		CurrentValue = false,
+		Flag = "AutoReel",
+		Callback = function(v)
+			config.autoReel = v
+			if v then startAutoReel() end
+		end,
+	})
+
+	FishingTab:CreateDropdown({
+		Name = "Reel Mode",
+		Options = {"legit", "instant"},
+		CurrentOption = {"legit"},
+		Flag = "ReelMode",
+		Callback = function(opt)
+			config.reelMode = opt[1] or opt
+		end,
+	})
+
+	-- ==================== SELLING TAB ====================
+	local SellTab = Window:CreateTab("Selling", 4335470520)
+
+	SellTab:CreateSection("Auto Sell")
+
+	SellTab:CreateToggle({
+		Name = "Auto Sell",
+		CurrentValue = false,
+		Flag = "AutoSell",
+		Callback = function(v) config.autoSell = v end,
+	})
+
+	SellTab:CreateSlider({
+		Name = "Sell Every N Catches",
+		Range = {1, 50},
+		Increment = 1,
+		Suffix = " fish",
+		CurrentValue = 10,
+		Flag = "SellInterval",
+		Callback = function(v) config.sellInterval = v end,
+	})
+
+	SellTab:CreateToggle({
+		Name = "Auto Appraise",
+		CurrentValue = false,
+		Flag = "AutoAppraise",
+		Callback = function(v) config.autoAppraise = v end,
+	})
+
+	SellTab:CreateButton({
+		Name = "Sell All Fish Now",
+		Callback = function()
+			sellAll()
+			Rayfield:Notify({
+				Title = "Fisch Byte",
+				Content = "Sold all fish!",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	-- ==================== SAFETY TAB ====================
+	local SafetyTab = Window:CreateTab("Safety", 4370318776)
+
+	SafetyTab:CreateSection("Protection")
+
+	SafetyTab:CreateToggle({
+		Name = "Anti Kick",
+		CurrentValue = true,
+		Flag = "AntiKick",
+		Callback = function(v) config.antiKick = v end,
+	})
+
+	SafetyTab:CreateToggle({
+		Name = "Anti AFK",
+		CurrentValue = true,
+		Flag = "AntiAFK",
+		Callback = function(v) config.antiAFK = v end,
+	})
+
+	SafetyTab:CreateToggle({
+		Name = "Spoof WalkSpeed / JumpPower",
+		CurrentValue = true,
+		Flag = "SpoofProps",
+		Callback = function(v) config.spoofProperties = v end,
+	})
+
+	SafetyTab:CreateToggle({
+		Name = "Humanize Delays",
+		CurrentValue = true,
+		Flag = "Humanize",
+		Callback = function(v) config.humanizeDelays = v end,
+	})
+
+	SafetyTab:CreateSection("Status")
+
+	SafetyTab:CreateParagraph({
+		Title = "Delta Compatibility",
+		Content = compatCount .. "/15 functions supported\nPlatform: " .. platformLabel,
+	})
+
+	-- ==================== UTILITY TAB ====================
+	local UtilTab = Window:CreateTab("Utility", 4370345189)
+
+	UtilTab:CreateSection("Visual")
+
+	UtilTab:CreateToggle({
+		Name = "Fish ESP",
+		CurrentValue = false,
+		Flag = "FishESP",
+		Callback = function(v)
+			config.fishESP = v
+			if not v then clearESP() end
+		end,
+	})
+
+	UtilTab:CreateSection("Teleport")
+
+	UtilTab:CreateButton({
+		Name = "Teleport to Nearest Bobber",
+		Callback = function()
+			teleportToNearestBobber()
+			Rayfield:Notify({
+				Title = "Fisch Byte",
+				Content = "Teleported to nearest bobber!",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	UtilTab:CreateButton({
+		Name = "Spear Fish Auto Farm",
+		Callback = function()
+			spearFishAutoFarm()
+			Rayfield:Notify({
+				Title = "Fisch Byte",
+				Content = "Spear fishing triggered!",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	UtilTab:CreateSection("Character")
+
+	UtilTab:CreateButton({
+		Name = "Force Unfreeze",
+		Callback = function()
+			forceUnfreeze()
+			Rayfield:Notify({
+				Title = "Fisch Byte",
+				Content = "Character unfrozen!",
+				Duration = 3,
+				Image = 4483362458,
+			})
+		end,
+	})
+
+	-- ==================== SCRIPT TAB ====================
+	local ScriptTab = Window:CreateTab("Script", 4483362458)
+
+	ScriptTab:CreateSection("Script")
+
+	ScriptTab:CreateButton({
+		Name = "Unload Script",
+		Callback = function()
+			Rayfield:Destroy()
+			unload()
+		end,
+	})
+
+	-- Startup notification.
+	Rayfield:Notify({
+		Title = "Fisch Byte v5.0",
+		Content = "Delta optimized | " .. compatCount .. "/15 compat | " .. platformLabel,
+		Duration = 5,
+		Image = 4483362458,
+	})
 end
 
 xpcall(initializeScript, onMainError)
