@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v5.2 — Delta Executor Edition
+    Fisch Byte v5.3 — Delta Executor Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v5.3 - Bug fixes: shake coord, seed race, lure check, reel counter
     v5.2 - All hooks OFF by default (prevents kick), optional enable
     v5.1 - Fixed "invalid client" kick (removed aggressive hooks)
     v5.0 - Split features, Rayfield UI, Delta optimization
@@ -294,7 +295,7 @@ local function autoCastLoop()
 
 		-- Check lure value before casting.
 		local lure = getLureValue(rod)
-		if lure and lure.Value > 0.001 then task.wait(0.1); continue end
+		if lure and lure.Value ~= 0 then task.wait(0.1); continue end
 
 		-- Cast via Net module or fallback.
 		local casted = false
@@ -356,7 +357,7 @@ local function doShakeMouse()
 	if button.Size ~= UDim2.new(2, 0, 2, 0) then button.Size = UDim2.new(2, 0, 2, 0) end
 	local px = button.AbsolutePosition.X + button.AbsoluteSize.X / 2
 	local py = button.AbsolutePosition.Y + button.AbsoluteSize.Y / 2
-	if px <= 0 and py <= 0 then return false end
+	if px <= 0 or py <= 0 then return false end
 	virtualInputManager:SendMouseButtonEvent(px, py, 0, true, game, 1)
 	virtualInputManager:SendMouseButtonEvent(px, py, 0, false, game, 1)
 	return true
@@ -394,8 +395,7 @@ end
 local function doShakeSeedBased()
 	if not state.shakeArgs then return false end
 	local args = state.shakeArgs
-	state.shakeArgs = nil
-	return pcall(function()
+	local ok = pcall(function()
 		local rngObj = Random.new(args.seed)
 		local scale = args.ShakeScale or 1
 		local cooldown = 0.25 / scale
@@ -416,6 +416,8 @@ local function doShakeSeedBased()
 			task.wait(cooldown + math.random(30, 80) / 1000)
 		end
 	end)
+	if ok then state.shakeArgs = nil end
+	return ok
 end
 
 ---Perform shake using the best method for the platform.
@@ -519,11 +521,12 @@ end
 local function autoReelLoop()
 	while state.running and config.autoReel do
 		if state.reelController and state.reelController.ActiveReel then
-			solveReelController(state.reelController.ActiveReel)
+			local reelSuccess = solveReelController(state.reelController.ActiveReel)
 
-			-- Post-reel: sell + appraise.
-			state.sellCounter = state.sellCounter + 1
-			if config.autoSell and state.sellCounter >= config.sellInterval then
+			-- Post-reel: only if successful
+			if reelSuccess then
+				state.sellCounter = state.sellCounter + 1
+				if config.autoSell and state.sellCounter >= config.sellInterval then
 				task.wait(0.3)
 				pcall(function()
 					local world = workspace:FindFirstChild("world")
@@ -549,6 +552,7 @@ local function autoReelLoop()
 				end)
 			end
 			task.wait(config.humanizeDelays and rng(0.3, 0.8) or 0.5)
+			end -- end reelSuccess check
 		else
 			task.wait(0.1)
 		end
@@ -766,7 +770,7 @@ end
 
 local function initializeScript()
 	pcall(function() setfpscap(9999) end)
-	task.spawn(loadNetRemotes)
+	loadNetRemotes()
 
 	-- Heartbeat.
 	table.insert(state.connections, runService.Heartbeat:Connect(function()
@@ -833,7 +837,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v5.2 | " .. platformLabel,
+		Name = "Fisch v5.3 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v5" },
@@ -1002,7 +1006,7 @@ local function initializeScript()
 
 	-- Startup notification.
 	Rayfield:Notify({
-		Title = "Fisch Byte v5.2",
+		Title = "Fisch Byte v5.3",
 		Content = "Delta optimized | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5, Image = 4483362458,
 	})
