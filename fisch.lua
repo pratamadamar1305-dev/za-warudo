@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v6.1 — Ultimate Edition
+    Fisch Byte v6.2 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v6.2 - CRITICAL FIX: auto cast no longer resets rod during fish bite
     v6.1 - Enhanced shake detection, better debug mode, improved error recovery
     v6.0 - Total overhaul: smart rod detection, advanced shake, robust reel, comprehensive error handling
     v5.3 - Bug fixes: shake coord, seed race, lure check, reel counter
@@ -146,6 +147,7 @@ local config = {
 	
 	-- Debug
 	debugMode = false,
+	bobberFix = false, -- DISABLED: destroying bobber attachments can break shake UI
 }
 
 -- ============================================================
@@ -433,16 +435,70 @@ local castThread = nil
 
 local function autoCastLoop()
 	while state.running and config.autoCast do
+		-- CRITICAL: Don't cast if fish is currently biting (shakeui exists)
+		if findShakeUI() then
+			if config.debugMode then
+				logDebug("Auto Cast paused: fish is biting (shakeui active)")
+			end
+			task.wait(0.5)
+			continue
+		end
+		
+		-- CRITICAL: Don't cast if reel minigame is active
+		if state.reelController and state.reelController.ActiveReel then
+			if config.debugMode then
+				logDebug("Auto Cast paused: reel minigame active")
+			end
+			task.wait(0.5)
+			continue
+		end
+		
+		-- Don't cast if reel UI is showing
+		if PLAYER_GUI:FindFirstChild("reel") then
+			if config.debugMode then
+				logDebug("Auto Cast paused: reel UI active")
+			end
+			task.wait(0.5)
+			continue
+		end
+		
 		local rod = getAnyRod()
 		if not rod then
 			task.wait(2)
 			continue
 		end
 		
-		-- Reset if bobber out or already casted
-		if rod:FindFirstChild("bobber") or (rod.values and rod.values.casted and rod.values.casted.Value) then
-			resetRod(rod)
-			task.wait(config.humanizeDelays and rng(0.2, 0.5) or 0.3)
+		-- Only reset if bobber is stuck (no shakeui, no reel, bobber still out)
+		local hasBobber = rod:FindFirstChild("bobber")
+		local isCasted = rod.values and rod.values.casted and rod.values.casted.Value
+		
+		if hasBobber or isCasted then
+			-- Wait for fish to bite or timeout before resetting
+			local waitTime = 0
+			while (hasBobber or isCasted) and waitTime < 60 do
+				-- If fish starts biting, STOP resetting!
+				if findShakeUI() then break end
+				if state.reelController and state.reelController.ActiveReel then break end
+				if PLAYER_GUI:FindFirstChild("reel") then break end
+				
+				task.wait(0.5)
+				waitTime = waitTime + 0.5
+				
+				-- Re-check bobber/casted state
+				hasBobber = rod:FindFirstChild("bobber")
+				isCasted = rod.values and rod.values.casted and rod.values.casted.Value
+			end
+			
+			-- Only reset if still stuck after waiting (and no fish biting)
+			if (hasBobber or isCasted) and not findShakeUI() then
+				if config.debugMode then
+					logDebug("Rod stuck for too long, resetting...")
+				end
+				resetRod(rod)
+				task.wait(config.humanizeDelays and rng(0.5, 1.0) or 0.5)
+			end
+			
+			continue -- Don't cast right after reset, wait for next cycle
 		end
 		
 		-- Check lure value before casting
@@ -1022,7 +1078,12 @@ end
 -- ============================================================
 -- SAFETY HOOKS (lightweight — only __namecall + __index)
 -- ============================================================
+-- Bobber fix: DISABLED by default (can interfere with shake UI)
+-- This was destroying "bob" and "bodyweld" attachments which can
+-- cause the fishing mechanics to break and shakeui to disappear.
+-- Enable via config.bobberFix if you know what you're doing.
 local function watchBobbers()
+	if not config.bobberFix then return end
 	table.insert(state.connections, workspace.DescendantAdded:Connect(function(d)
 		if not state.running then return end
 		if d:IsA("BasePart") and d.Name:lower():find("bobber") then
@@ -1175,6 +1236,23 @@ local function initializeScript()
 		end
 	end))
 	
+	-- INSTANT SHAKE: detect shakeui appearing and trigger shake immediately
+	-- This is a backup to autoShakeLoop for faster response
+	table.insert(state.connections, PLAYER_GUI.DescendantAdded:Connect(function(d)
+		if not state.running or not config.autoShake then return end
+		if d.Name == "shakeui" then
+			if config.debugMode then
+				logDebug("shakeui appeared! Triggering instant shake...")
+			end
+			task.spawn(function()
+				task.wait(0.1) -- Small delay to let UI initialize
+				if config.autoShake then
+					doShake()
+				end
+			end)
+		end
+	end))
+	
 	-- Bite end detection
 	table.insert(state.connections, PLAYER_GUI.DescendantRemoving:Connect(function(d)
 		if d.Name == "playerbar" and d.Parent and d.Parent.Name == "bar" then
@@ -1224,7 +1302,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 	
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v6.0 | " .. platformLabel,
+		Name = "Fisch v6.2 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v6" },
@@ -1491,8 +1569,8 @@ local function initializeScript()
 	
 	-- Startup notification
 	Rayfield:Notify({
-		Title = "Fisch Byte v6.1",
-		Content = "Enhanced shake detection | " .. compatCount .. "/14 compat | " .. platformLabel,
+		Title = "Fisch Byte v6.2",
+		Content = "Fixed shake UI disappearing | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5,
 		Image = 4483362458,
 	})
