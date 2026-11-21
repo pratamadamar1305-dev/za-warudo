@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v6.3 — Ultimate Edition
+    Fisch Byte v6.4 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v6.4 - CRITICAL FIX: findShakeUI() return statement bug
     v6.3 - Simplified auto shake using Nexus Hub v4 seed-based pattern
     v6.2 - CRITICAL FIX: auto cast no longer resets rod during fish bite
     v6.1 - Enhanced shake detection, better debug mode, improved error recovery
@@ -558,8 +559,8 @@ local function findShakeUI()
 	pcall(function()
 		local coreGui = game:GetService("CoreGui")
 		shakeui = coreGui:FindFirstChild("shakeui")
-		if shakeui then return shakeui end
 	end)
+	if shakeui then return shakeui end
 	
 	-- Check gethui (executor hidden UI)
 	if gethui then
@@ -570,8 +571,9 @@ local function findShakeUI()
 			end
 		end)
 	end
+	if shakeui then return shakeui end
 	
-	return shakeui
+	return nil
 end
 
 
@@ -1091,7 +1093,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 	
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v6.3 | " .. platformLabel,
+		Name = "Fisch v6.4 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v6" },
@@ -1340,7 +1342,7 @@ local function initializeScript()
 	
 	-- Startup notification
 	Rayfield:Notify({
-		Title = "Fisch Byte v6.3",
+		Title = "Fisch Byte v6.4",
 		Content = "Fixed shake UI disappearing | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5,
 		Image = 4483362458,
