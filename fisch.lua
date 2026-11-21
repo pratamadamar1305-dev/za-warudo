@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v6.0 — Ultimate Edition
+    Fisch Byte v6.1 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v6.1 - Enhanced shake detection, better debug mode, improved error recovery
     v6.0 - Total overhaul: smart rod detection, advanced shake, robust reel, comprehensive error handling
     v5.3 - Bug fixes: shake coord, seed race, lure check, reel counter
     v5.2 - All hooks OFF by default (prevents kick), optional enable
@@ -142,6 +143,9 @@ local config = {
 	humanizeDelays = true,
 	freezeWhileFishing = false,
 	fishESP = false,
+	
+	-- Debug
+	debugMode = false,
 }
 
 -- ============================================================
@@ -236,51 +240,88 @@ end
 -- NET MODULE LOADING (Nexus Hub v4 pattern)
 -- ============================================================
 local function loadNetModule()
-	local success, result = safeCall("Load Net Module", function()
-		local packages = replicatedStorage:WaitForChild("packages", 10)
-		local netModule = packages:WaitForChild("Net", 10)
-		state.netModule = require(netModule)
-		
-		if not state.netModule then
-			error("Net module is nil")
-		end
-		
-		-- Load remotes
-		state.castRemote = state.netModule:RemoteFunction("FishingRod/Cast")
-		state.resetRemote = state.netModule:RemoteEvent("FishingRod/Reset")
-		state.shakeRemote = state.netModule:RemoteEvent("LureShake/Shake")
-		state.shakeStartRF = state.netModule:RemoteFunction("LureShake/Start")
-		
-		-- Intercept ShakeStart for seed-based humanized shake
-		if state.shakeStartRF and DELTA_COMPAT.getcallbackvalue then
-			local ok, orig = pcall(getcallbackvalue, state.shakeStartRF, "OnClientInvoke")
-			if ok and type(orig) == "function" then
-				pcall(function()
-					state.shakeStartRF.OnClientInvoke = function(args)
-						state.shakeArgs = args
-						return orig(args)
-					end
-				end)
+	-- Retry up to 3 times
+	for attempt = 1, 3 do
+		local success, result = safeCall(string.format("Load Net Module (attempt %d/3)", attempt), function()
+			local packages = replicatedStorage:WaitForChild("packages", 10)
+			local netModule = packages:WaitForChild("Net", 10)
+			state.netModule = require(netModule)
+			
+			if not state.netModule then
+				error("Net module is nil")
 			end
-		end
-		
-		-- Load ReelController
-		local client = replicatedStorage:FindFirstChild("client")
-		if client then
-			local controllers = client:FindFirstChild("legacyControllers")
-			if controllers then
-				local reelMod = controllers:FindFirstChild("ReelController")
-				if reelMod then
-					state.reelController = require(reelMod)
+			
+			-- Load remotes with validation
+			local ok1, castRemote = pcall(function() return state.netModule:RemoteFunction("FishingRod/Cast") end)
+			local ok2, resetRemote = pcall(function() return state.netModule:RemoteEvent("FishingRod/Reset") end)
+			local ok3, shakeRemote = pcall(function() return state.netModule:RemoteEvent("LureShake/Shake") end)
+			local ok4, shakeStartRF = pcall(function() return state.netModule:RemoteFunction("LureShake/Start") end)
+			
+			state.castRemote = ok1 and castRemote or nil
+			state.resetRemote = ok2 and resetRemote or nil
+			state.shakeRemote = ok3 and shakeRemote or nil
+			state.shakeStartRF = ok4 and shakeStartRF or nil
+			
+			if not state.castRemote then
+				logError("Net Module", "Failed to load Cast remote")
+			end
+			if not state.shakeRemote then
+				logError("Net Module", "Failed to load Shake remote - shake may not work")
+			end
+			
+			-- Intercept ShakeStart for seed-based humanized shake
+			if state.shakeStartRF and DELTA_COMPAT.getcallbackvalue then
+				local ok, orig = pcall(getcallbackvalue, state.shakeStartRF, "OnClientInvoke")
+				if ok and type(orig) == "function" then
+					pcall(function()
+						state.shakeStartRF.OnClientInvoke = function(args)
+							state.shakeArgs = args
+							if config.debugMode then
+								logDebug("Seed-based shake args captured")
+							end
+							return orig(args)
+						end
+					end)
+				else
+					logError("Net Module", "Failed to intercept ShakeStart - seed shake disabled")
 				end
 			end
+			
+			-- Load ReelController
+			local client = replicatedStorage:FindFirstChild("client")
+			if client then
+				local controllers = client:FindFirstChild("legacyControllers")
+				if controllers then
+					local reelMod = controllers:FindFirstChild("ReelController")
+					if reelMod then
+						local ok5, reelController = pcall(require, reelMod)
+						state.reelController = ok5 and reelController or nil
+					end
+				end
+			end
+			
+			if config.debugMode then
+				logDebug(string.format("Net module loaded: cast=%s, shake=%s, reel=%s", 
+					tostring(state.castRemote ~= nil),
+					tostring(state.shakeRemote ~= nil),
+					tostring(state.reelController ~= nil)))
+			end
+			
+			return true
+		end)
+		
+		if success then
+			return true
 		end
 		
-		logDebug("Net module loaded successfully")
-		return true
-	end)
+		-- Wait before retry
+		if attempt < 3 then
+			task.wait(2)
+		end
+	end
 	
-	return success
+	logError("Net Module", "Failed to load after 3 attempts - using fallback methods")
+	return false
 end
 
 -- ============================================================
@@ -454,14 +495,83 @@ end
 -- ============================================================
 local shakeThread = nil
 
-local function getShakeButton()
+-- Find shakeui in multiple locations (PlayerGui, CoreGui, gethui)
+local function findShakeUI()
+	-- Check PlayerGui first (most common)
 	local shakeui = PLAYER_GUI:FindFirstChild("shakeui")
-	if not shakeui then return nil end
-	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then return nil end
+	if shakeui then return shakeui end
+	
+	-- Check CoreGui (some games use this)
+	pcall(function()
+		local coreGui = game:GetService("CoreGui")
+		shakeui = coreGui:FindFirstChild("shakeui")
+		if shakeui then return shakeui end
+	end)
+	
+	-- Check gethui (executor hidden UI)
+	if gethui then
+		pcall(function()
+			local hui = gethui()
+			if hui then
+				shakeui = hui:FindFirstChild("shakeui")
+			end
+		end)
+	end
+	
+	return shakeui
+end
+
+-- Improved shake button detection with better validation
+local function getShakeButton()
+	local shakeui = findShakeUI()
+	if not shakeui then
+		if config.debugMode then
+			logDebug("Shake UI not found")
+		end
+		return nil
+	end
+	
+	-- Check if ScreenGui is enabled
+	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then
+		if config.debugMode then
+			logDebug("Shake UI is disabled (ScreenGui.Enabled = false)")
+		end
+		return nil
+	end
+	
+	-- Find safezone container
 	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then return nil end
+	if not safezone then
+		-- Try alternative paths
+		safezone = shakeui:FindFirstChild("SafeZone")
+		if not safezone then
+			if config.debugMode then
+				logDebug("Shake UI safezone not found")
+			end
+			return nil
+		end
+	end
+	
+	-- Find button
 	local button = safezone:FindFirstChild("button")
-	if not button or not button.Visible then return nil end
+	if not button then
+		button = safezone:FindFirstChild("Button")
+		if not button then
+			if config.debugMode then
+				logDebug("Shake UI button not found")
+			end
+			return nil
+		end
+	end
+	
+	-- Validate button visibility
+	if not button.Visible then
+		if config.debugMode then
+			logDebug("Shake button is not visible")
+		end
+		return nil
+	end
+	
 	return button
 end
 
@@ -558,38 +668,128 @@ end
 -- Perform shake using the best method for the platform
 local function doShake()
 	-- Try seed-based first (most humanized)
-	if doShakeSeedBased() then return true end
+	if state.shakeArgs then
+		if config.debugMode then
+			logDebug("Attempting seed-based shake...")
+		end
+		if doShakeSeedBased() then
+			if config.debugMode then
+				logDebug("Seed-based shake successful")
+			end
+			return true
+		end
+		if config.debugMode then
+			logDebug("Seed-based shake failed, trying fallback methods...")
+		end
+	end
 	
 	local method = config.shakeMethod
 	if method == "auto" then
 		if IS_MOBILE then
+			if config.debugMode then logDebug("Mobile: trying firesignal...") end
 			if doShakeFiresignal() then return true end
+			
+			if config.debugMode then logDebug("Mobile: trying mouse click...") end
 			if doShakeMouse() then return true end
+			
+			if config.debugMode then logDebug("Mobile: trying remote fire...") end
 			return doShakeRemote()
 		else
+			if config.debugMode then logDebug("PC: trying keyboard...") end
 			if doShakeKeyboard() then return true end
+			
+			if config.debugMode then logDebug("PC: trying mouse click...") end
 			if doShakeMouse() then return true end
+			
+			if config.debugMode then logDebug("PC: trying firesignal...") end
 			if doShakeFiresignal() then return true end
+			
+			if config.debugMode then logDebug("PC: trying remote fire...") end
 			return doShakeRemote()
 		end
 	end
 	
-	if method == "firesignal" then return doShakeFiresignal() end
-	if method == "mouse" then return doShakeMouse() end
-	if method == "remote" then return doShakeRemote() end
-	if method == "keyboard" then return doShakeKeyboard() end
+	if method == "firesignal" then
+		if config.debugMode then logDebug("Manual: using firesignal method") end
+		return doShakeFiresignal()
+	end
+	if method == "mouse" then
+		if config.debugMode then logDebug("Manual: using mouse method") end
+		return doShakeMouse()
+	end
+	if method == "remote" then
+		if config.debugMode then logDebug("Manual: using remote method") end
+		return doShakeRemote()
+	end
+	if method == "keyboard" then
+		if config.debugMode then logDebug("Manual: using keyboard method") end
+		return doShakeKeyboard()
+	end
+	
+	if config.debugMode then logDebug("All shake methods failed") end
 	return false
 end
 
 local function autoShakeLoop()
+	local lastShakeTime = 0
+	local failedAttempts = 0
+	local maxFailures = 50 -- Reset after 50 failed attempts
+	
 	while state.running and config.autoShake do
-		if PLAYER_GUI:FindFirstChild("shakeui") then
-			if doShake() then
+		local currentTime = tick()
+		
+		-- Check if shake UI exists (fish is biting)
+		local shakeui = findShakeUI()
+		
+		if shakeui then
+			if config.debugMode then
+				logDebug("Shake UI detected, attempting shake...")
+			end
+			
+			-- Try to shake
+			local success = doShake()
+			
+			if success then
+				-- Reset failure counter on success
+				failedAttempts = 0
+				lastShakeTime = currentTime
+				
+				if config.debugMode then
+					logDebug("Shake successful")
+				end
+				
+				-- Humanized delay between shakes
 				task.wait(config.humanizeDelays and rng(config.shakeSpeed * 0.7, config.shakeSpeed * 1.3) or config.shakeSpeed)
 			else
+				failedAttempts = failedAttempts + 1
+				
+				if config.debugMode and failedAttempts % 10 == 0 then
+					logDebug(string.format("Shake failed %d times, button might not be ready", failedAttempts))
+				end
+				
+				-- Short wait before retry
 				task.wait(0.05)
+				
+				-- If too many failures, wait longer (maybe UI is glitching)
+				if failedAttempts >= maxFailures then
+					if config.debugMode then
+						logDebug("Too many shake failures, waiting 1 second...")
+					end
+					task.wait(1)
+					failedAttempts = 0
+				end
 			end
 		else
+			-- No shake UI = fish not biting yet
+			-- Reset failure counter
+			failedAttempts = 0
+			
+			if config.debugMode and currentTime - lastShakeTime > 5 then
+				logDebug("Waiting for fish to bite (no shake UI)...")
+				lastShakeTime = currentTime
+			end
+			
+			-- Wait before checking again
 			task.wait(0.1)
 		end
 	end
@@ -1263,6 +1463,23 @@ local function initializeScript()
 	
 	-- ==================== SCRIPT TAB ====================
 	local ScriptTab = Window:CreateTab("Script", 4483362458)
+	ScriptTab:CreateSection("Debug")
+	ScriptTab:CreateToggle({
+		Name = "Debug Mode (console logs)",
+		CurrentValue = false,
+		Flag = "DebugMode",
+		Callback = function(v)
+			config.debugMode = v
+			if v then
+				Rayfield:Notify({
+					Title = "Fisch Byte",
+					Content = "Debug mode enabled - check console for logs",
+					Duration = 3,
+					Image = 4483362458,
+				})
+			end
+		end,
+	})
 	ScriptTab:CreateSection("Script")
 	ScriptTab:CreateButton({
 		Name = "Unload Script",
@@ -1274,8 +1491,8 @@ local function initializeScript()
 	
 	-- Startup notification
 	Rayfield:Notify({
-		Title = "Fisch Byte v6.0",
-		Content = "Ultimate edition | " .. compatCount .. "/14 compat | " .. platformLabel,
+		Title = "Fisch Byte v6.1",
+		Content = "Enhanced shake detection | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5,
 		Image = 4483362458,
 	})
