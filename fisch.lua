@@ -1,11 +1,12 @@
 --[[
-    Fisch Byte v6.2 — Ultimate Edition
+    Fisch Byte v6.3 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
     Changelog:
+    v6.3 - Simplified auto shake using Nexus Hub v4 seed-based pattern
     v6.2 - CRITICAL FIX: auto cast no longer resets rod during fish bite
     v6.1 - Enhanced shake detection, better debug mode, improved error recovery
     v6.0 - Total overhaul: smart rod detection, advanced shake, robust reel, comprehensive error handling
@@ -127,10 +128,6 @@ local config = {
 	castPower = 100,
 	perfectCast = true,
 	reelMode = "legit",
-	
-	-- Shake settings
-	shakeSpeed = 0.05,
-	shakeMethod = "auto",
 	
 	-- Sell settings
 	autoSell = false,
@@ -577,276 +574,68 @@ local function findShakeUI()
 	return shakeui
 end
 
--- Improved shake button detection with better validation
-local function getShakeButton()
-	local shakeui = findShakeUI()
-	if not shakeui then
-		if config.debugMode then
-			logDebug("Shake UI not found")
-		end
-		return nil
-	end
-	
-	-- Check if ScreenGui is enabled
-	if shakeui:IsA("ScreenGui") and not shakeui.Enabled then
-		if config.debugMode then
-			logDebug("Shake UI is disabled (ScreenGui.Enabled = false)")
-		end
-		return nil
-	end
-	
-	-- Find safezone container
-	local safezone = shakeui:FindFirstChild("safezone")
-	if not safezone then
-		-- Try alternative paths
-		safezone = shakeui:FindFirstChild("SafeZone")
-		if not safezone then
-			if config.debugMode then
-				logDebug("Shake UI safezone not found")
-			end
-			return nil
-		end
-	end
-	
-	-- Find button
-	local button = safezone:FindFirstChild("button")
-	if not button then
-		button = safezone:FindFirstChild("Button")
-		if not button then
-			if config.debugMode then
-				logDebug("Shake UI button not found")
-			end
-			return nil
-		end
-	end
-	
-	-- Validate button visibility
-	if not button.Visible then
-		if config.debugMode then
-			logDebug("Shake button is not visible")
-		end
-		return nil
-	end
-	
-	return button
-end
 
--- Shake method: firesignal (mobile-safe, no input simulation)
-local function doShakeFiresignal()
-	local button = getShakeButton()
-	if not button then return false end
-	return pcall(function() firesignal(button.MouseButton1Click) end)
-end
-
--- Shake method: mouse click (mobile-safe)
-local function doShakeMouse()
-	local button = getShakeButton()
-	if not button then return false end
-	if button.Size ~= UDim2.new(2, 0, 2, 0) then
-		button.Size = UDim2.new(2, 0, 2, 0)
-	end
-	local px = button.AbsolutePosition.X + button.AbsoluteSize.X / 2
-	local py = button.AbsolutePosition.Y + button.AbsoluteSize.Y / 2
-	if px <= 0 or py <= 0 then return false end
-	virtualInputManager:SendMouseButtonEvent(px, py, 0, true, game, 1)
-	virtualInputManager:SendMouseButtonEvent(px, py, 0, false, game, 1)
-	return true
-end
-
--- Shake method: direct remote fire (mobile-safe)
-local function doShakeRemote()
-	if state.shakeRemote then
-		if pcall(function() state.shakeRemote:FireServer() end) then
-			return true
-		end
-	end
-	local button = getShakeButton()
-	if not button then return false end
-	local shakeRemote = button:FindFirstChild("shake")
-	if shakeRemote and shakeRemote:IsA("RemoteEvent") then
-		return pcall(function() shakeRemote:FireServer() end)
-	end
-	return false
-end
-
--- Shake method: keyboard Return key (PC ONLY)
-local function doShakeKeyboard()
-	if IS_MOBILE then return false end
-	local button = getShakeButton()
-	if not button then return false end
-	guiService.SelectedObject = button
-	if guiService.SelectedObject == button then
-		virtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-		virtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-		return true
-	end
-	return false
-end
-
--- Shake: seed-based from Nexus Hub v4 (most humanized)
-local function doShakeSeedBased()
-	if not state.shakeArgs then return false end
-	local args = state.shakeArgs
-	
-	local ok = pcall(function()
-		local rngObj = Random.new(args.seed)
-		local scale = args.ShakeScale or 1
-		local cooldown = SHAKE_COOLDOWN_BASE / scale
-		local acc = args.initialTimer
-		local needed = 0
-		
-		-- Calculate needed shakes
-		while acc > 0 and needed < 60 do
-			acc = acc - rngObj:NextNumber(0.5, 1.5)
-			needed = needed + 1
-		end
-		
-		-- Initial humanized delay
-		task.wait(math.random(35, 60) / 100)
-		
-		-- Perform shakes with humanized timing
-		for i = 1, needed do
-			if not config.autoShake then break end
-			if state.shakeRemote then
-				pcall(function() state.shakeRemote:FireServer() end)
-			else
-				doShakeRemote()
-			end
-			state.totalShakes = state.totalShakes + 1
-			task.wait(cooldown + math.random(30, 80) / 1000)
-		end
-	end)
-	
-	if ok then state.shakeArgs = nil end
-	return ok
-end
-
--- Perform shake using the best method for the platform
-local function doShake()
-	-- Try seed-based first (most humanized)
-	if state.shakeArgs then
-		if config.debugMode then
-			logDebug("Attempting seed-based shake...")
-		end
-		if doShakeSeedBased() then
-			if config.debugMode then
-				logDebug("Seed-based shake successful")
-			end
-			return true
-		end
-		if config.debugMode then
-			logDebug("Seed-based shake failed, trying fallback methods...")
-		end
-	end
-	
-	local method = config.shakeMethod
-	if method == "auto" then
-		if IS_MOBILE then
-			if config.debugMode then logDebug("Mobile: trying firesignal...") end
-			if doShakeFiresignal() then return true end
-			
-			if config.debugMode then logDebug("Mobile: trying mouse click...") end
-			if doShakeMouse() then return true end
-			
-			if config.debugMode then logDebug("Mobile: trying remote fire...") end
-			return doShakeRemote()
-		else
-			if config.debugMode then logDebug("PC: trying keyboard...") end
-			if doShakeKeyboard() then return true end
-			
-			if config.debugMode then logDebug("PC: trying mouse click...") end
-			if doShakeMouse() then return true end
-			
-			if config.debugMode then logDebug("PC: trying firesignal...") end
-			if doShakeFiresignal() then return true end
-			
-			if config.debugMode then logDebug("PC: trying remote fire...") end
-			return doShakeRemote()
-		end
-	end
-	
-	if method == "firesignal" then
-		if config.debugMode then logDebug("Manual: using firesignal method") end
-		return doShakeFiresignal()
-	end
-	if method == "mouse" then
-		if config.debugMode then logDebug("Manual: using mouse method") end
-		return doShakeMouse()
-	end
-	if method == "remote" then
-		if config.debugMode then logDebug("Manual: using remote method") end
-		return doShakeRemote()
-	end
-	if method == "keyboard" then
-		if config.debugMode then logDebug("Manual: using keyboard method") end
-		return doShakeKeyboard()
-	end
-	
-	if config.debugMode then logDebug("All shake methods failed") end
-	return false
-end
 
 local function autoShakeLoop()
-	local lastShakeTime = 0
-	local failedAttempts = 0
-	local maxFailures = 50 -- Reset after 50 failed attempts
+	-- Simplified shake loop based on Nexus Hub v4 pattern
+	-- Waits for seed args from LureShake/Start interception, then fires all needed shakes
 	
 	while state.running and config.autoShake do
-		local currentTime = tick()
-		
-		-- Check if shake UI exists (fish is biting)
-		local shakeui = findShakeUI()
-		
-		if shakeui then
+		-- Wait for seed args (captured from LureShake/Start RemoteFunction)
+		if state.shakeArgs then
+			local args = state.shakeArgs
+			state.shakeArgs = nil -- Clear immediately to prevent double-fire
+			
 			if config.debugMode then
-				logDebug("Shake UI detected, attempting shake...")
+				logDebug("Seed-based shake: processing seed " .. tostring(args.seed))
 			end
 			
-			-- Try to shake
-			local success = doShake()
-			
-			if success then
-				-- Reset failure counter on success
-				failedAttempts = 0
-				lastShakeTime = currentTime
+			-- Calculate needed shakes using server-side RNG
+			local ok = pcall(function()
+				local rngObj = Random.new(args.seed)
+				local scale = args.ShakeScale or 1
+				local cooldown = 0.25 / scale
+				local acc = args.initialTimer
+				local needed = 0
+				
+				-- Calculate how many shakes needed
+				while acc > 0 and needed < 60 do
+					acc = acc - rngObj:NextNumber(0.5, 1.5)
+					needed = needed + 1
+				end
 				
 				if config.debugMode then
-					logDebug("Shake successful")
+					logDebug(string.format("Need %d shakes, cooldown %.3fs", needed, cooldown))
 				end
 				
-				-- Humanized delay between shakes
-				task.wait(config.humanizeDelays and rng(config.shakeSpeed * 0.7, config.shakeSpeed * 1.3) or config.shakeSpeed)
-			else
-				failedAttempts = failedAttempts + 1
+				-- Initial humanized delay
+				task.wait(math.random(35, 60) / 100)
 				
-				if config.debugMode and failedAttempts % 10 == 0 then
-					logDebug(string.format("Shake failed %d times, button might not be ready", failedAttempts))
-				end
-				
-				-- Short wait before retry
-				task.wait(0.05)
-				
-				-- If too many failures, wait longer (maybe UI is glitching)
-				if failedAttempts >= maxFailures then
-					if config.debugMode then
-						logDebug("Too many shake failures, waiting 1 second...")
+				-- Fire all needed shakes with proper cooldown
+				for i = 1, needed do
+					if not config.autoShake then break end
+					
+					-- Fire shake remote
+					if state.shakeRemote then
+						pcall(function() state.shakeRemote:FireServer() end)
+						state.totalShakes = state.totalShakes + 1
 					end
-					task.wait(1)
-					failedAttempts = 0
+					
+					-- Humanized cooldown between shakes
+					task.wait(cooldown + math.random(30, 80) / 1000)
 				end
+				
+				if config.debugMode then
+					logDebug("Seed-based shake completed")
+				end
+			end)
+			
+			if not ok and config.debugMode then
+				logDebug("Seed-based shake failed")
 			end
 		else
-			-- No shake UI = fish not biting yet
-			-- Reset failure counter
-			failedAttempts = 0
-			
-			if config.debugMode and currentTime - lastShakeTime > 5 then
-				logDebug("Waiting for fish to bite (no shake UI)...")
-				lastShakeTime = currentTime
-			end
-			
-			-- Wait before checking again
-			task.wait(0.1)
+			-- No seed args yet, wait a bit
+			task.wait(0.05)
 		end
 	end
 end
@@ -1302,7 +1091,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 	
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v6.2 | " .. platformLabel,
+		Name = "Fisch v6.3 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v6" },
@@ -1358,24 +1147,6 @@ local function initializeScript()
 			config.autoShake = v
 			if v then startAutoShake() end
 		end,
-	})
-	FishingTab:CreateDropdown({
-		Name = "Shake Method",
-		Options = IS_MOBILE and {"auto", "firesignal", "mouse", "remote"} or {"auto", "firesignal", "mouse", "remote", "keyboard"},
-		CurrentOption = {"auto"},
-		Flag = "ShakeMethod",
-		Callback = function(opt)
-			config.shakeMethod = type(opt) == "table" and opt[1] or opt
-		end,
-	})
-	FishingTab:CreateSlider({
-		Name = "Shake Speed (ms)",
-		Range = {1, 20},
-		Increment = 1,
-		Suffix = "ms",
-		CurrentValue = 5,
-		Flag = "ShakeSpeed",
-		Callback = function(v) config.shakeSpeed = v / 100 end,
 	})
 	
 	FishingTab:CreateSection("Auto Reel")
@@ -1569,7 +1340,7 @@ local function initializeScript()
 	
 	-- Startup notification
 	Rayfield:Notify({
-		Title = "Fisch Byte v6.2",
+		Title = "Fisch Byte v6.3",
 		Content = "Fixed shake UI disappearing | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5,
 		Image = 4483362458,
