@@ -1,5 +1,5 @@
 --[[
-    Fisch Byte v7.0 — Ultimate Edition
+    Fisch Byte v7.1 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
@@ -18,10 +18,11 @@
     ✅ Farm max 1-2 hours per session (shorter = safer)
     ✅ Take 15-20 min breaks every 45-60 minutes
     ✅ Vary fishing spots (don't stay in one place)
-    ✅ Keep ALL humanization ON (delays, mistakes, etc)
+    ✅ Keep ALL humanization ON (delays, variance, etc)
     ✅ NEVER enable hooks (anti-kick, spoof, etc)
     ✅ Use private servers if possible
     ✅ Don't be greedy (quit while ahead)
+    ✅ Manual control: turn off auto reel to "pretend noob"
     
     REALITY CHECK:
     - Even with all precautions, you CAN still get banned
@@ -30,6 +31,7 @@
     - No script can guarantee safety
     
     Changelog:
+    v7.1 - Removed auto-fail feature (user controls mistakes manually)
     v7.0 - Maximum anti-detection: advanced behavior mimicry
     v6.4 - CRITICAL FIX: findShakeUI() return statement bug
     v6.3 - Simplified auto shake using Nexus Hub v4 seed-based pattern
@@ -772,18 +774,6 @@ end
 local function autoReelLoop()
 	while state.running and config.autoReel do
 		if state.reelController and state.reelController.ActiveReel then
-			-- Anti-detection: Occasionally "fail" to catch fish (simulate human mistakes)
-			local shouldFail = config.humanizeDelays and math.random(1, 20) == 1 -- 5% chance to fail
-			
-			if shouldFail then
-				if config.debugMode then
-					logDebug("Simulating mistake: letting fish escape")
-				end
-				-- Wait for reel to timeout naturally
-				task.wait(5)
-				continue
-			end
-			
 			local reelSuccess = solveReelController(state.reelController.ActiveReel)
 			
 			-- Post-reel: only if successful
