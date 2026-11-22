@@ -1,20 +1,36 @@
 --[[
-    Fisch Byte v6.5 — Ultimate Edition
+    Fisch Byte v7.0 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
-    ⚠️ ANTI-DETECTION TIPS:
-    - Use on ALT accounts only
-    - Don't farm for more than 2-4 hours at a time
-    - Take breaks (AFK for 10-15 minutes every hour)
-    - Vary your fishing spots
-    - Keep Humanize Delays ON (default)
-    - Don't enable hooks (anti-kick, spoof properties) unless necessary
+    ⚠️⚠️⚠️ CRITICAL WARNING ⚠️⚠️⚠️
+    NO SCRIPT IS 100% UNDETECTABLE IN 2026!
+    Roblox uses Hyperion/Byfron kernel-level anti-cheat with:
+    - AI-driven behavioral analysis
+    - Process injection detection
+    - Hardware fingerprinting (HWID bans)
+    - Ban waves (delayed bans)
+    
+    BEST PRACTICES TO MINIMIZE RISK:
+    ✅ Use ALT accounts ONLY (never main account!)
+    ✅ Farm max 1-2 hours per session (shorter = safer)
+    ✅ Take 15-20 min breaks every 45-60 minutes
+    ✅ Vary fishing spots (don't stay in one place)
+    ✅ Keep ALL humanization ON (delays, mistakes, etc)
+    ✅ NEVER enable hooks (anti-kick, spoof, etc)
+    ✅ Use private servers if possible
+    ✅ Don't be greedy (quit while ahead)
+    
+    REALITY CHECK:
+    - Even with all precautions, you CAN still get banned
+    - Detection can be immediate OR delayed (ban waves)
+    - Hardware bans block ALL accounts on that PC
+    - No script can guarantee safety
     
     Changelog:
-    v6.5 - Enhanced anti-detection: more randomization, humanized timing
+    v7.0 - Maximum anti-detection: advanced behavior mimicry
     v6.4 - CRITICAL FIX: findShakeUI() return statement bug
     v6.3 - Simplified auto shake using Nexus Hub v4 seed-based pattern
     v6.2 - CRITICAL FIX: auto cast no longer resets rod during fish bite
@@ -100,9 +116,14 @@ local PLAYER_GUI = LOCAL_PLAYER:WaitForChild("PlayerGui")
 local DEFAULT_WALK_SPEED = 16
 local DEFAULT_JUMP_POWER = 50
 local MERCHANT_NAME = "Marc Merchant"
-local MAX_SESSION_HOURS = 4
+local MAX_SESSION_HOURS = 2 -- Reduced from 4 to 2 for safety
 local IS_MOBILE = userInputService.TouchEnabled
 local ESP_UPDATE_INTERVAL = 2
+
+-- Anti-detection: Random session time (60-120 minutes)
+local SESSION_MINUTES_MIN = 60
+local SESSION_MINUTES_MAX = 120
+local SESSION_RANDOM_STOP = math.random(SESSION_MINUTES_MIN, SESSION_MINUTES_MAX) * 60
 
 -- Timeout constants (seconds)
 local CAST_TIMEOUT = 5
@@ -751,6 +772,18 @@ end
 local function autoReelLoop()
 	while state.running and config.autoReel do
 		if state.reelController and state.reelController.ActiveReel then
+			-- Anti-detection: Occasionally "fail" to catch fish (simulate human mistakes)
+			local shouldFail = config.humanizeDelays and math.random(1, 20) == 1 -- 5% chance to fail
+			
+			if shouldFail then
+				if config.debugMode then
+					logDebug("Simulating mistake: letting fish escape")
+				end
+				-- Wait for reel to timeout naturally
+				task.wait(5)
+				continue
+			end
+			
 			local reelSuccess = solveReelController(state.reelController.ActiveReel)
 			
 			-- Post-reel: only if successful
@@ -1106,16 +1139,31 @@ local function initializeScript()
 		end
 	end)
 	
-	-- Session watchdog
+	-- Session watchdog with random stop time (anti-detection)
 	task.spawn(function()
+		local sessionLimit = SESSION_RANDOM_STOP
+		if config.debugMode then
+			logDebug(string.format("Session will auto-stop after %d minutes", sessionLimit / 60))
+		end
+		
 		while state.running do
 			task.wait(60)
-			if (os.clock() - state.sessionStart) / 3600 >= MAX_SESSION_HOURS then
-				warn("[Fisch] Session limit reached. Auto-stopping.")
+			local elapsed = os.clock() - state.sessionStart
+			if elapsed >= sessionLimit then
+				warn(string.format("[Fisch] Session limit reached (%d min). Auto-stopping for safety.", sessionLimit / 60))
 				config.autoCast = false
 				config.autoShake = false
 				config.autoReel = false
 				setCharacterFrozen(false)
+				
+				-- Notify user
+				pcall(function()
+					game:GetService("StarterGui"):SetCore("SendNotification", {
+						Title = "Fisch Byte",
+						Text = string.format("Session ended after %d min. Take a break!", sessionLimit / 60),
+						Duration = 10
+					})
+				end)
 				break
 			end
 		end
