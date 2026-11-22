@@ -1330,7 +1330,7 @@ local function initializeScript()
 	local platformLabel = IS_MOBILE and "Delta Mobile" or "Delta PC"
 	
 	local Window = Rayfield:CreateWindow({
-		Name = "Fisch v6.4 | " .. platformLabel,
+		Name = "Fisch v7.2 | " .. platformLabel,
 		LoadingTitle = "Fisch Byte",
 		LoadingSubtitle = "Δ " .. compatCount .. "/14 compatible",
 		ConfigurationSaving = { Enabled = true, FolderName = "FischByte", FileName = "Config_v6" },
@@ -1579,7 +1579,7 @@ local function initializeScript()
 	
 	-- Startup notification
 	Rayfield:Notify({
-		Title = "Fisch Byte v6.4",
+		Title = "Fisch Byte v7.2",
 		Content = "Fixed shake UI disappearing | " .. compatCount .. "/14 compat | " .. platformLabel,
 		Duration = 5,
 		Image = 4483362458,
