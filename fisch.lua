@@ -1,6 +1,6 @@
 --[[
-    Fisch Byte v7.2 — Ultimate Edition
-    Auto Cast | Auto Shake | Auto Reel | Safety Hooks
+    Fisch Byte v8.0 — Ultimate Edition
+    Auto Cast | Auto Shake | Auto Reel | Safety Hooks | Teleport
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
@@ -23,6 +23,7 @@
     ✅ Use private servers if possible
     ✅ Don't be greedy (quit while ahead)
     ✅ Manual control: turn off auto reel to "pretend noob"
+    ✅ Teleport: Use from isolated areas only (boat to ocean)
     
     REALITY CHECK:
     - Even with all precautions, you CAN still get banned
@@ -31,6 +32,7 @@
     - No script can guarantee safety
     
     Changelog:
+    v8.0 - Added teleport system with 27 locations, safety checks, gradual teleport
     v7.2 - Enhanced error handling, logging system, validation, code cleanup
     v7.1 - Removed auto-fail feature (user controls mistakes manually)
     v7.0 - Maximum anti-detection: advanced behavior mimicry
@@ -330,6 +332,13 @@ local config = {
 	freezeWhileFishing = false,
 	fishESP = false,
 	
+	-- Teleport
+	teleportEnabled = false,
+	teleportDetectionRadius = 300, -- Check players within this radius
+	teleportSpeed = "medium", -- slow/medium/fast
+	teleportCooldown = 600, -- 10 minutes in seconds
+	emergencyCancel = true, -- Cancel teleport if player detected
+	
 	-- Debug
 	debugMode = false,
 	bobberFix = false, -- DISABLED: destroying bobber attachments can break shake UI
@@ -367,6 +376,48 @@ local state = {
 	totalReels = 0,
 	totalSells = 0,
 	failedCasts = 0,
+	
+	-- Teleport
+	lastTeleportTime = 0,
+	teleportCount = 0,
+	isTeleporting = false,
+}
+
+-- ============================================================
+-- TELEPORT LOCATIONS (27 islands, excluding Second Sea)
+-- ============================================================
+local TELEPORT_LOCATIONS = {
+	-- First Sea - Main Islands
+	{ name = "Moosewood", coords = Vector3.new(400, 135, 250), category = "First Sea", safety = "crowded" },
+	{ name = "Mushgrove Swamp", coords = Vector3.new(2420, 135, -750), category = "First Sea", safety = "moderate" },
+	{ name = "Roslit Bay", coords = Vector3.new(-1600, 130, 500), category = "First Sea", safety = "crowded" },
+	{ name = "Snowcap Island", coords = Vector3.new(2625, 135, 2370), category = "First Sea", safety = "moderate" },
+	{ name = "Sunstone Island", coords = Vector3.new(-870, 135, -1100), category = "First Sea", safety = "moderate" },
+	{ name = "Statue of Sovereignty", coords = Vector3.new(35, 135, -1010), category = "First Sea", safety = "moderate" },
+	{ name = "Terrapin Island", coords = Vector3.new(-95, 130, 1875), category = "First Sea", safety = "moderate" },
+	{ name = "The Arch", coords = Vector3.new(1100, 130, -1250), category = "First Sea", safety = "safe" },
+	{ name = "Harvester Spike", coords = Vector3.new(-1260, 135, 1550), category = "First Sea", safety = "safe" },
+	{ name = "Birch Cay", coords = Vector3.new(1650, 130, -2350), category = "First Sea", safety = "safe" },
+	{ name = "Earmark Island", coords = Vector3.new(1200, 130, 530), category = "First Sea", safety = "safe" },
+	{ name = "Haddock Rock", coords = Vector3.new(-500, 125, -505), category = "First Sea", safety = "safe" },
+	{ name = "Desolate Deep", coords = Vector3.new(-800, 130, -3100), category = "First Sea", safety = "safe" },
+	{ name = "Forsaken Shore", coords = Vector3.new(-2750, 130, 1450), category = "First Sea", safety = "safe" },
+	{ name = "Ancient Isle", coords = Vector3.new(6000, 200, 300), category = "First Sea", safety = "safest" },
+	
+	-- Special Locations
+	{ name = "Grand Reef", coords = Vector3.new(-3555, 150, 510), category = "Special", safety = "moderate" },
+	{ name = "Vertigo", coords = Vector3.new(-110, -515, 1040), category = "Special", safety = "safe" },
+	{ name = "The Depths", coords = Vector3.new(-75, -530, 1285), category = "Special", safety = "safe" },
+	{ name = "Atlantis", coords = Vector3.new(-4300, -580, 1800), category = "Special", safety = "safe" },
+	{ name = "Mariana's Veil", coords = Vector3.new(-1500, 125, 530), category = "Special", safety = "moderate" },
+	{ name = "The Deep", coords = Vector3.new(-194, 130, -4669), category = "Special", safety = "safe" },
+	
+	-- Other Locations
+	{ name = "Treasure Island", coords = Vector3.new(8582, 175, -17304), category = "Other", safety = "safest" },
+	{ name = "Trade Plaza", coords = Vector3.new(535, 82, 775), category = "Other", safety = "crowded" },
+	{ name = "Castaway Cliffs", coords = Vector3.new(690, 135, -1693), category = "Other", safety = "moderate" },
+	{ name = "Cursed Isle", coords = Vector3.new(1860, 135, 1210), category = "Other", safety = "safe" },
+	{ name = "Everturn Forest", coords = Vector3.new(2365, 130, -2330), category = "Other", safety = "safe" },
 }
 
 -- ============================================================
@@ -614,6 +665,227 @@ local function forceUnfreeze()
 		hum.JumpPower = DEFAULT_JUMP_POWER
 	end
 	state.frozenCFrame = nil
+end
+
+-- ============================================================
+-- TELEPORT FUNCTIONS (Isolated Teleport System)
+-- ============================================================
+
+-- Check for players within detection radius
+local function checkPlayersNearby(radius)
+	local character = LOCAL_PLAYER.Character
+	if not character then return 0, {} end
+	
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return 0, {} end
+	
+	local playerPosition = hrp.Position
+	local nearbyPlayers = {}
+	local count = 0
+	
+	for _, player in ipairs(playersService:GetPlayers()) do
+		if player ~= LOCAL_PLAYER and player.Character then
+			local playerHRP = player.Character:FindFirstChild("HumanoidRootPart")
+			if playerHRP then
+				local distance = (playerHRP.Position - playerPosition).Magnitude
+				if distance <= radius then
+					count = count + 1
+					table.insert(nearbyPlayers, {
+						name = player.Name,
+						distance = math.floor(distance)
+					})
+				end
+			end
+		end
+	end
+	
+	return count, nearbyPlayers
+end
+
+-- Check if teleport cooldown is ready
+local function isTeleportCooldownReady()
+	local currentTime = os.clock()
+	local timeSinceLastTeleport = currentTime - state.lastTeleportTime
+	return timeSinceLastTeleport >= config.teleportCooldown
+end
+
+-- Get remaining cooldown time
+local function getTeleportCooldownRemaining()
+	local currentTime = os.clock()
+	local timeSinceLastTeleport = currentTime - state.lastTeleportTime
+	local remaining = config.teleportCooldown - timeSinceLastTeleport
+	return math.max(0, math.floor(remaining))
+end
+
+-- Gradual teleport with safety checks
+local function gradualTeleport(targetCoords, locationName)
+	if state.isTeleporting then
+		logWarn("Teleport already in progress")
+		return false
+	end
+	
+	if not config.teleportEnabled then
+		logError("Teleport", "Teleport is disabled")
+		return false
+	end
+	
+	if not isTeleportCooldownReady() then
+		local remaining = getTeleportCooldownRemaining()
+		logWarn(string.format("Teleport cooldown: %d seconds remaining", remaining))
+		return false
+	end
+	
+	local character = LOCAL_PLAYER.Character
+	if not character then
+		logError("Teleport", "No character found")
+		return false
+	end
+	
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		logError("Teleport", "No HumanoidRootPart found")
+		return false
+	end
+	
+	-- Pre-teleport safety check
+	local playerCount, nearbyPlayers = checkPlayersNearby(config.teleportDetectionRadius)
+	if playerCount > 0 then
+		logWarn(string.format("Teleport cancelled: %d player(s) detected within %d studs", playerCount, config.teleportDetectionRadius))
+		if config.debugMode then
+			for _, p in ipairs(nearbyPlayers) do
+				logDebug(string.format("  - %s (%d studs away)", p.name, p.distance))
+			end
+		end
+		return false
+	end
+	
+	state.isTeleporting = true
+	logInfo(string.format("Starting gradual teleport to %s...", locationName))
+	
+	-- Calculate teleport parameters based on speed
+	local jumpDistance, jumpDelay
+	if config.teleportSpeed == "slow" then
+		jumpDistance = 15
+		jumpDelay = 1.0
+	elseif config.teleportSpeed == "fast" then
+		jumpDistance = 40
+		jumpDelay = 0.3
+	else -- medium
+		jumpDistance = 25
+		jumpDelay = 0.6
+	end
+	
+	-- Calculate number of jumps needed
+	local startPos = hrp.Position
+	local totalDistance = (targetCoords - startPos).Magnitude
+	local numJumps = math.ceil(totalDistance / jumpDistance)
+	numJumps = math.max(3, math.min(numJumps, 20)) -- Min 3, max 20 jumps
+	
+	-- Add natural delay before starting
+	task.wait(math.random(2, 4))
+	
+	-- Perform gradual teleport
+	local success = true
+	for i = 1, numJumps do
+		if not state.running or not config.teleportEnabled then
+			logWarn("Teleport cancelled by user")
+			success = false
+			break
+		end
+		
+		-- Emergency cancel check
+		if config.emergencyCancel then
+			local currentPlayers, _ = checkPlayersNearby(config.teleportDetectionRadius)
+			if currentPlayers > 0 then
+				logWarn(string.format("Teleport emergency cancel: %d player(s) detected!", currentPlayers))
+				success = false
+				break
+			end
+		end
+		
+		-- Calculate intermediate position
+		local progress = i / numJumps
+		local intermediatePos = startPos:Lerp(targetCoords, progress)
+		
+		-- Add small randomization to look more natural
+		local randomOffset = Vector3.new(
+			math.random(-2, 2),
+			0,
+			math.random(-2, 2)
+		)
+		intermediatePos = intermediatePos + randomOffset
+		
+		-- Teleport to intermediate position
+		hrp.CFrame = CFrame.new(intermediatePos)
+		
+		-- Wait with humanized delay
+		local humanizedDelay = jumpDelay + math.random(-0.1, 0.2)
+		task.wait(humanizedDelay)
+	end
+	
+	-- Final teleport to exact target
+	if success then
+		hrp.CFrame = CFrame.new(targetCoords)
+		state.lastTeleportTime = os.clock()
+		state.teleportCount = state.teleportCount + 1
+		logInfo(string.format("Teleport complete! Arrived at %s", locationName))
+		logInfo(string.format("Total teleports this session: %d", state.teleportCount))
+	end
+	
+	state.isTeleporting = false
+	return success
+end
+
+-- Get location by name
+local function getLocationByName(name)
+	for _, loc in ipairs(TELEPORT_LOCATIONS) do
+		if loc.name == name then
+			return loc
+		end
+	end
+	return nil
+end
+
+-- Get locations by category
+local function getLocationsByCategory(category)
+	local locations = {}
+	for _, loc in ipairs(TELEPORT_LOCATIONS) do
+		if loc.category == category then
+			table.insert(locations, loc)
+		end
+	end
+	return locations
+end
+
+-- Get locations by safety level
+local function getLocationsBySafety(safety)
+	local locations = {}
+	for _, loc in ipairs(TELEPORT_LOCATIONS) do
+		if loc.safety == safety then
+			table.insert(locations, loc)
+		end
+	end
+	return locations
+end
+
+-- Get all location names (for dropdown)
+local function getAllLocationNames()
+	local names = {}
+	for _, loc in ipairs(TELEPORT_LOCATIONS) do
+		table.insert(names, loc.name)
+	end
+	return names
+end
+
+-- Get safe location names (for dropdown)
+local function getSafeLocationNames()
+	local names = {}
+	for _, loc in ipairs(TELEPORT_LOCATIONS) do
+		if loc.safety == "safe" or loc.safety == "safest" then
+			table.insert(names, loc.name .. " [" .. loc.safety .. "]")
+		end
+	end
+	return names
 end
 
 -- ============================================================
@@ -1547,6 +1819,197 @@ local function initializeScript()
 				Image = 4483362458,
 			})
 		end,
+	})
+	
+	-- ==================== TELEPORT TAB ====================
+	local TeleportTab = Window:CreateTab("Teleport", 4335470520)
+	
+	TeleportTab:CreateSection("⚠️ Isolated Teleport System")
+	TeleportTab:CreateParagraph({
+		Title = "How to Use",
+		Content = "1. Navigate boat to isolated area (ocean)\n2. Exit boat and confirm no players nearby\n3. Press teleport button below\n4. Script will check for players and teleport gradually",
+	})
+	
+	TeleportTab:CreateSection("Enable Teleport")
+	TeleportTab:CreateToggle({
+		Name = "Enable Teleport System",
+		CurrentValue = false,
+		Flag = "TeleportEnabled",
+		Callback = function(v)
+			config.teleportEnabled = v
+			if v then
+				Rayfield:Notify({
+					Title = "Fisch Byte",
+					Content = "Teleport enabled - use from isolated areas only!",
+					Duration = 5,
+					Image = 4483362458,
+				})
+			end
+		end,
+	})
+	
+	TeleportTab:CreateSection("Safety Settings")
+	TeleportTab:CreateSlider({
+		Name = "Player Detection Radius",
+		Range = {100, 500},
+		Increment = 50,
+		Suffix = " studs",
+		CurrentValue = 300,
+		Flag = "TeleportRadius",
+		Callback = function(v)
+			config.teleportDetectionRadius = v
+		end,
+	})
+	TeleportTab:CreateDropdown({
+		Name = "Teleport Speed",
+		Options = {"slow", "medium", "fast"},
+		CurrentOption = {"medium"},
+		Flag = "TeleportSpeed",
+		Callback = function(opt)
+			config.teleportSpeed = opt[1]
+		end,
+	})
+	TeleportTab:CreateSlider({
+		Name = "Teleport Cooldown",
+		Range = {300, 1800},
+		Increment = 60,
+		Suffix = " seconds",
+		CurrentValue = 600,
+		Flag = "TeleportCooldown",
+		Callback = function(v)
+			config.teleportCooldown = v
+		end,
+	})
+	TeleportTab:CreateToggle({
+		Name = "Emergency Cancel (stop if player detected)",
+		CurrentValue = true,
+		Flag = "EmergencyCancel",
+		Callback = function(v)
+			config.emergencyCancel = v
+		end,
+	})
+	
+	TeleportTab:CreateSection("Safest Locations (Recommended)")
+	local safestLocations = getLocationsBySafety("safest")
+	for _, loc in ipairs(safestLocations) do
+		TeleportTab:CreateButton({
+			Name = "Teleport to " .. loc.name,
+			Callback = function()
+				task.spawn(function()
+					local success = gradualTeleport(loc.coords, loc.name)
+					if success then
+						Rayfield:Notify({
+							Title = "Fisch Byte",
+							Content = "Arrived at " .. loc.name .. "!",
+							Duration = 3,
+							Image = 4483362458,
+						})
+					else
+						Rayfield:Notify({
+							Title = "Fisch Byte",
+							Content = "Teleport failed or cancelled",
+							Duration = 3,
+							Image = 4483362458,
+						})
+					end
+				end)
+			end,
+		})
+	end
+	
+	TeleportTab:CreateSection("Safe Locations")
+	local safeLocations = getLocationsBySafety("safe")
+	for _, loc in ipairs(safeLocations) do
+		TeleportTab:CreateButton({
+			Name = "Teleport to " .. loc.name,
+			Callback = function()
+				task.spawn(function()
+					local success = gradualTeleport(loc.coords, loc.name)
+					if success then
+						Rayfield:Notify({
+							Title = "Fisch Byte",
+							Content = "Arrived at " .. loc.name .. "!",
+							Duration = 3,
+							Image = 4483362458,
+						})
+					else
+						Rayfield:Notify({
+							Title = "Fisch Byte",
+							Content = "Teleport failed or cancelled",
+							Duration = 3,
+							Image = 4483362458,
+						})
+					end
+				end)
+			end,
+		})
+	end
+	
+	TeleportTab:CreateSection("All Locations (27 Islands)")
+	local allLocationNames = getAllLocationNames()
+	TeleportTab:CreateDropdown({
+		Name = "Select Location",
+		Options = allLocationNames,
+		CurrentOption = {allLocationNames[1]},
+		Flag = "SelectedTeleportLocation",
+		Callback = function(opt)
+			-- Store selected location for teleport button
+			state.selectedTeleportLocation = opt[1]
+		end,
+	})
+	TeleportTab:CreateButton({
+		Name = "Teleport to Selected Location",
+		Callback = function()
+			if not state.selectedTeleportLocation then
+				Rayfield:Notify({
+					Title = "Fisch Byte",
+					Content = "Please select a location first!",
+					Duration = 3,
+					Image = 4483362458,
+				})
+				return
+			end
+			
+			local loc = getLocationByName(state.selectedTeleportLocation)
+			if not loc then
+				Rayfield:Notify({
+					Title = "Fisch Byte",
+					Content = "Location not found!",
+					Duration = 3,
+					Image = 4483362458,
+				})
+				return
+			end
+			
+			task.spawn(function()
+				local success = gradualTeleport(loc.coords, loc.name)
+				if success then
+					Rayfield:Notify({
+						Title = "Fisch Byte",
+						Content = "Arrived at " .. loc.name .. "!",
+						Duration = 3,
+						Image = 4483362458,
+					})
+				else
+					Rayfield:Notify({
+						Title = "Fisch Byte",
+						Content = "Teleport failed or cancelled",
+						Duration = 3,
+						Image = 4483362458,
+					})
+				end
+			end)
+		end,
+	})
+	
+	TeleportTab:CreateSection("Status")
+	TeleportTab:CreateParagraph({
+		Title = "Teleport Statistics",
+		Content = string.format("Total Teleports: %d\nLast Teleport: %s\nCooldown: %d seconds",
+			state.teleportCount,
+			state.lastTeleportTime > 0 and os.date("%H:%M:%S", state.lastTeleportTime) or "Never",
+			config.teleportCooldown
+		),
 	})
 	
 	-- ==================== SCRIPT TAB ====================
