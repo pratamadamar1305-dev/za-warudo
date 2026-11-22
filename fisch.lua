@@ -1,5 +1,5 @@
 --[[
-    Fisch Byte v7.1 — Ultimate Edition
+    Fisch Byte v7.2 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
@@ -31,6 +31,7 @@
     - No script can guarantee safety
     
     Changelog:
+    v7.2 - Enhanced error handling, logging system, validation, code cleanup
     v7.1 - Removed auto-fail feature (user controls mistakes manually)
     v7.0 - Maximum anti-detection: advanced behavior mimicry
     v6.4 - CRITICAL FIX: findShakeUI() return statement bug
@@ -96,6 +97,160 @@ if not DELTA_COMPAT.firesignal then
 end
 if not DELTA_COMPAT.gethui then
 	getfenv().gethui = function() return nil end
+end
+
+-- ============================================================
+-- LOGGING SYSTEM (Enhanced for v7.2)
+-- ============================================================
+
+local LogLevel = {
+	DEBUG = 1,
+	INFO = 2,
+	WARN = 3,
+	ERROR = 4,
+}
+
+local LOG_PREFIX = "[Fisch v7.2]"
+local MIN_LOG_LEVEL = LogLevel.INFO -- Change to DEBUG for verbose logging
+
+local function log(level, message, ...)
+	if level < MIN_LOG_LEVEL then return end
+	
+	local levelStr = "UNKNOWN"
+	if level == LogLevel.DEBUG then levelStr = "DEBUG"
+	elseif level == LogLevel.INFO then levelStr = "INFO"
+	elseif level == LogLevel.WARN then levelStr = "WARN"
+	elseif level == LogLevel.ERROR then levelStr = "ERROR"
+	end
+	
+	local formattedMsg = string.format("[%s] %s", levelStr, message)
+	if select("#", ...) > 0 then
+		formattedMsg = string.format(formattedMsg, ...)
+	end
+	
+	print(LOG_PREFIX .. " " .. formattedMsg)
+	
+	if level == LogLevel.ERROR then
+		warn(LOG_PREFIX .. " " .. formattedMsg)
+	end
+end
+
+local function logDebug(msg, ...) log(LogLevel.DEBUG, msg, ...) end
+local function logInfo(msg, ...) log(LogLevel.INFO, msg, ...) end
+local function logWarn(msg, ...) log(LogLevel.WARN, msg, ...) end
+local function logError(msg, ...) log(LogLevel.ERROR, msg, ...) end
+
+-- ============================================================
+-- VALIDATION SYSTEM (Enhanced for v7.2)
+-- ============================================================
+
+local function validateInstance(instance, expectedType, name)
+	if not instance then
+		logError("Validation failed: %s is nil", name or "instance")
+		return false
+	end
+	
+	if expectedType and not instance:IsA(expectedType) then
+		logError("Validation failed: %s is not a %s (got %s)", name or "instance", expectedType, instance.ClassName)
+		return false
+	end
+	
+	return true
+end
+
+local function validateTable(t, name)
+	if type(t) ~= "table" then
+		logError("Validation failed: %s is not a table (got %s)", name or "value", type(t))
+		return false
+	end
+	return true
+end
+
+local function validateFunction(f, name)
+	if type(f) ~= "function" then
+		logError("Validation failed: %s is not a function (got %s)", name or "value", type(f))
+		return false
+	end
+	return true
+end
+
+-- ============================================================
+-- ERROR HANDLING SYSTEM (Enhanced for v7.2)
+-- ============================================================
+
+local ErrorHandler = {}
+
+function ErrorHandler.safeCall(funcName, func, ...)
+	if not validateFunction(func, funcName) then
+		return false, "Invalid function"
+	end
+	
+	local success, result = pcall(func, ...)
+	
+	if not success then
+		logError("%s failed: %s", funcName, tostring(result))
+		return false, result
+	end
+	
+	return true, result
+end
+
+function ErrorHandler.tryCatch(tryFunc, catchFunc, finallyFunc)
+	local success, result = pcall(tryFunc)
+	
+	if not success and catchFunc then
+		pcall(catchFunc, result)
+	elseif success and catchFunc then
+		-- No error, but call catch with nil if needed
+	end
+	
+	if finallyFunc then
+		pcall(finallyFunc)
+	end
+	
+	return success, result
+end
+
+-- Statistics tracker for debugging
+local Stats = {
+	totalCasts = 0,
+	successfulCasts = 0,
+	failedCasts = 0,
+	totalShakes = 0,
+	totalReels = 0,
+	successfulReels = 0,
+	failedReels = 0,
+	sessionStartTime = os.clock(),
+}
+
+function Stats.increment(statName)
+	if Stats[statName] then
+		Stats[statName] = Stats[statName] + 1
+	end
+end
+
+function Stats.getSessionDuration()
+	return os.clock() - Stats.sessionStartTime
+end
+
+function Stats.getSuccessRate(statType)
+	if statType == "cast" then
+		return Stats.totalCasts > 0 and (Stats.successfulCasts / Stats.totalCasts * 100) or 0
+	elseif statType == "reel" then
+		return Stats.totalReels > 0 and (Stats.successfulReels / Stats.totalReels * 100) or 0
+	end
+	return 0
+end
+
+function Stats.printSummary()
+	logInfo("=== SESSION STATISTICS ===")
+	logInfo("Session Duration: %.2f minutes", Stats.getSessionDuration() / 60)
+	logInfo("Casts: %d total, %d success, %d failed (%.1f%% success rate)", 
+		Stats.totalCasts, Stats.successfulCasts, Stats.failedCasts, Stats.getSuccessRate("cast"))
+	logInfo("Shakes: %d total", Stats.totalShakes)
+	logInfo("Reels: %d total, %d success, %d failed (%.1f%% success rate)", 
+		Stats.totalReels, Stats.successfulReels, Stats.failedReels, Stats.getSuccessRate("reel"))
+	logInfo("========================")
 end
 
 -- ============================================================
@@ -264,8 +419,11 @@ local function unload()
 	-- Unfreeze character
 	setCharacterFrozen(false)
 	
+	-- Print session statistics
+	Stats.printSummary()
+	
 	shared.FischByteLoaded = nil
-	print("[Fisch] Script unloaded successfully")
+	logInfo("Script unloaded successfully")
 end
 
 -- ============================================================
@@ -579,7 +737,8 @@ local function autoCastLoop()
 		end
 		
 		if casted then
-			state.totalCasts = state.totalCasts + 1
+			Stats.increment("totalCasts")
+			Stats.increment("successfulCasts")
 			if config.freezeWhileFishing then setCharacterFrozen(true) end
 			task.wait(config.humanizeDelays and rng(0.4, 0.8) or 0.5)
 			
@@ -588,7 +747,8 @@ local function autoCastLoop()
 				task.wait(math.random(1500, 3000) / 1000)
 			end
 		else
-			state.failedCasts = state.failedCasts + 1
+			Stats.increment("totalCasts")
+			Stats.increment("failedCasts")
 			task.wait(1) -- Wait longer on failure
 		end
 	end
@@ -675,7 +835,7 @@ local function autoShakeLoop()
 					-- Fire shake remote
 					if state.shakeRemote then
 						pcall(function() state.shakeRemote:FireServer() end)
-						state.totalShakes = state.totalShakes + 1
+						Stats.increment("totalShakes")
 					end
 					
 					-- Humanized cooldown between shakes (more variance)
@@ -778,7 +938,8 @@ local function autoReelLoop()
 			
 			-- Post-reel: only if successful
 			if reelSuccess then
-				state.totalReels = state.totalReels + 1
+				Stats.increment("totalReels")
+				Stats.increment("successfulReels")
 				state.sellCounter = state.sellCounter + 1
 				
 				-- Auto sell
