@@ -1,11 +1,20 @@
 --[[
-    Fisch Byte v6.4 — Ultimate Edition
+    Fisch Byte v6.5 — Ultimate Edition
     Auto Cast | Auto Shake | Auto Reel | Safety Hooks
     
     Optimized for Delta (sUNC 98%, mobile-first)
     UI: Rayfield Library
     
+    ⚠️ ANTI-DETECTION TIPS:
+    - Use on ALT accounts only
+    - Don't farm for more than 2-4 hours at a time
+    - Take breaks (AFK for 10-15 minutes every hour)
+    - Vary your fishing spots
+    - Keep Humanize Delays ON (default)
+    - Don't enable hooks (anti-kick, spoof properties) unless necessary
+    
     Changelog:
+    v6.5 - Enhanced anti-detection: more randomization, humanized timing
     v6.4 - CRITICAL FIX: findShakeUI() return statement bug
     v6.3 - Simplified auto shake using Nexus Hub v4 seed-based pattern
     v6.2 - CRITICAL FIX: auto cast no longer resets rod during fish bite
@@ -506,11 +515,29 @@ local function autoCastLoop()
 			continue
 		end
 		
+		-- Random delay before casting (anti-detection)
+		if config.humanizeDelays then
+			task.wait(math.random(200, 800) / 1000)
+		end
+		
+		-- Add variance to cast power (not always perfect)
+		local actualPower = config.castPower
+		if config.humanizeDelays then
+			actualPower = actualPower + math.random(-5, 5)
+			actualPower = math.clamp(actualPower, 80, 100)
+		end
+		
+		-- Sometimes don't use perfect cast (more human-like)
+		local usePerfect = config.perfectCast
+		if config.humanizeDelays and math.random(1, 10) <= 2 then
+			usePerfect = false
+		end
+		
 		-- Cast via Net module or fallback
 		local casted = false
 		if state.castRemote then
 			local ok, result = safeCall("Cast (Net)", function()
-				return state.castRemote:InvokeServer(math.clamp(config.castPower, 0, 100), config.perfectCast)
+				return state.castRemote:InvokeServer(actualPower, usePerfect)
 			end)
 			if ok and result == true then
 				casted = true
@@ -532,6 +559,11 @@ local function autoCastLoop()
 			state.totalCasts = state.totalCasts + 1
 			if config.freezeWhileFishing then setCharacterFrozen(true) end
 			task.wait(config.humanizeDelays and rng(0.4, 0.8) or 0.5)
+			
+			-- Occasional longer wait (simulate human thinking)
+			if config.humanizeDelays and math.random(1, 15) == 1 then
+				task.wait(math.random(1500, 3000) / 1000)
+			end
 		else
 			state.failedCasts = state.failedCasts + 1
 			task.wait(1) -- Wait longer on failure
@@ -610,8 +642,8 @@ local function autoShakeLoop()
 					logDebug(string.format("Need %d shakes, cooldown %.3fs", needed, cooldown))
 				end
 				
-				-- Initial humanized delay
-				task.wait(math.random(35, 60) / 100)
+				-- Initial humanized delay (more variance)
+				task.wait(math.random(80, 150) / 100)
 				
 				-- Fire all needed shakes with proper cooldown
 				for i = 1, needed do
@@ -623,8 +655,14 @@ local function autoShakeLoop()
 						state.totalShakes = state.totalShakes + 1
 					end
 					
-					-- Humanized cooldown between shakes
-					task.wait(cooldown + math.random(30, 80) / 1000)
+					-- Humanized cooldown between shakes (more variance)
+					local jitter = math.random(-20, 40) / 1000
+					task.wait(cooldown + math.random(50, 120) / 1000 + jitter)
+					
+					-- Occasional pause (simulate human thinking)
+					if math.random(1, 10) == 1 then
+						task.wait(math.random(100, 300) / 1000)
+					end
 				end
 				
 				if config.debugMode then
