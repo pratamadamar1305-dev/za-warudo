@@ -11,7 +11,7 @@ npm run dev
 
 Open the Vite URL. Click **TAP TO START** to unlock audio, then start a race from the menu. Production build: `npm run build`. Android wrapper (Capacitor, landscape/fullscreen): `npm run android:sync`; with JDK 21 and Android SDK installed, build/installable debug APK via `npm run android:apk`.
 
-GitHub Actions workflow `.github/workflows/android-apk.yml` builds `app-debug.apk` on pushes to the session branch or manual dispatch and publishes it as the `eurobeat-drift-legend-debug-apk` artifact (30-day retention). Debug APKs are installable for testing but are not Play Store-signed release packages.
+GitHub Actions workflow `.github/workflows/android-apk.yml` builds `app-debug.apk` on pushes to the session branch or manual dispatch, publishes the `eurobeat-drift-legend-debug-apk` artifact (30-day retention), and refreshes a downloadable prerelease at `https://github.com/pratamadamar1305-dev/za-warudo/releases/tag/android-debug-latest`. Debug APKs are installable for testing but are not Play Store-signed release packages.
 
 ## Controls
 
