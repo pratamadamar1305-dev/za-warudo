@@ -35,7 +35,27 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace --info assembleDebug -PVERSION_CODE=${GITHUB_RUN_NUMBER} -PVERSION_NAME=1.0.${GITHUB_RUN_NUMBER}
+          set +e
+          ./gradlew --no-daemon --stacktrace --info assembleDebug -PVERSION_CODE=${GITHUB_RUN_NUMBER} -PVERSION_NAME=1.0.${GITHUB_RUN_NUMBER} > gradle-build.log 2>&1
+          RESULT=$?
+          cat gradle-build.log
+          if [ "$RESULT" -ne 0 ]; then
+            DETAILS=$(python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('gradle-build.log').read_text(errors='replace').splitlines()
+          anchors = ('What went wrong:', 'Could not resolve', 'Could not find', 'Execution failed', 'FAILURE: Build failed', 'error:')
+          starts = [i for i, line in enumerate(lines) if any(term in line for term in anchors)]
+          selected = []
+          for start in starts[-4:]:
+              selected.extend(lines[start:min(start + 16, len(lines))])
+          if not selected:
+              selected = lines[-50:]
+          print('\\n'.join(selected)[-5000:])
+          PY
+            )
+            echo "::error title=Gradle build diagnostics::$DETAILS"
+          fi
+          exit "$RESULT"
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
