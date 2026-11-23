@@ -1,0 +1,4 @@
+node_modules/
+dist/
+simtest-out/
+.vite/

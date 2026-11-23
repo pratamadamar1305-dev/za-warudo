@@ -1,0 +1,26 @@
+{
+  "name": "eurobeat-drift-legend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "simtest": "tsc -p tsconfig.sim.json && node simtest-out/tools/simtest.js",
+    "android:sync": "npm run build && cap sync android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^7.6.10",
+    "@capacitor/core": "^7.6.10",
+    "three": "^0.181.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^7.6.10",
+    "@types/three": "^0.181.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.4"
+  }
+}
