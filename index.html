@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#0b1026" />
-  <title>EUROBEAT DRIFT LEGEND — Gunma Downhill</title>
+  <title>Eurobeat Drift Legend — Gunma Downhill</title>
 </head>
 <body>
   <canvas id="game-canvas"></canvas>
@@ -38,22 +38,26 @@
     <div id="hud-manual" class="hidden">MANUAL OVERRIDE</div>
     <div id="hud-dirty" class="hidden">DIRTY — TIDAK MASUK LEADERBOARD</div>
     <div id="hud-sectors" class="hud-panel"></div>
+    <div id="hud-thermal" class="hidden" aria-label="kualitas grafis diturunkan">▰</div>
     <button id="hud-pause-btn" aria-label="pause">II</button>
   </div>
 
   <!-- ============ TOUCH CONTROLS ============ -->
   <div id="touch-ui" class="hidden">
     <div class="touch-left">
-      <button id="touch-brake" data-control="brake" class="touch-btn">REM</button>
-      <button id="touch-gas" data-control="gas" class="touch-btn touch-gas">GAS</button>
+      <div class="touch-steer" aria-label="steering">
+        <button id="touch-left" data-control="left" class="touch-btn touch-arrow" aria-label="steer left">◀</button>
+        <button id="touch-right" data-control="right" class="touch-btn touch-arrow" aria-label="steer right">▶</button>
+      </div>
+      <button id="touch-handbrake" data-control="hb" class="touch-btn touch-hb" aria-label="handbrake">⟲<small>HB</small></button>
     </div>
     <div class="touch-right">
-      <button id="touch-handbrake" data-control="hb" class="touch-btn touch-hb">HB</button>
-      <div class="touch-steer">
-        <button id="touch-left" data-control="left" class="touch-btn">◀</button>
-        <button id="touch-right" data-control="right" class="touch-btn">▶</button>
-      </div>
+      <button id="touch-brake" data-control="brake" class="touch-btn touch-brake">REM</button>
+      <button id="touch-gas" data-control="gas" class="touch-btn touch-gas">GAS</button>
     </div>
+  </div>
+  <div id="tilt-calibration" class="hidden" role="dialog" aria-modal="true">
+    <div class="tilt-card"><h2>KALIBRASI SETIR TILT</h2><p>Pegang ponsel di posisi netral, lalu tekan kalibrasi.</p><button id="btn-calibrate-tilt" class="menu-btn menu-btn-primary">KALIBRASI</button><button id="btn-tilt-close" class="menu-btn">TUTUP</button><button id="btn-tilt-reset" class="menu-btn">RESET TILT</button></div>
   </div>
 
   <!-- ============ SCREENS ============ -->
@@ -87,7 +91,7 @@
       <div class="garage-body">
         <div class="garage-cars" id="garage-cars"></div>
         <div class="garage-detail">
-          <h3 id="garage-car-name">HACHI 86</h3>
+          <h3 id="garage-car-name">TOFU RUNNER</h3>
           <div class="car-tag" id="garage-car-tag">RWD · 1.6L NA · 940 KG</div>
           <div id="garage-stats" class="stat-rows"></div>
           <div class="upgrade-head">UPGRADE <span class="upgrade-note">4 level · memengaruhi handling nyata</span></div>
@@ -110,6 +114,10 @@
           <select id="set-quality"><option value="low">LOW</option><option value="medium" selected>MEDIUM</option><option value="high">HIGH</option></select>
         </label>
         <label>Sensitivitas Kamera <input type="range" id="set-cam-sens" min="50" max="200" /></label>
+        <label>Setir sentuh <select id="set-steering"><option value="buttons">Tombol panah</option><option value="tilt">Tilt ponsel</option></select></label>
+        <button type="button" id="btn-tilt-calibrate" class="menu-btn">KALIBRASI TILT</button>
+        <label>Audio <select id="set-audio-mode"><option value="speaker">Mode Speaker</option><option value="headphones">Headphone</option></select></label>
+        <label class="check"><input type="checkbox" id="set-haptics" checked /> Getaran haptik</label>
         <label class="check"><input type="checkbox" id="set-motion-reduce" /> Kurangi efek motion (speed lines, shake)</label>
         <label class="check"><input type="checkbox" id="set-subtitles" checked /> Subtitle dialog</label>
         <label class="check"><input type="checkbox" id="set-invert-y" /> Invert sumbu kamera vertikal</label>
@@ -139,7 +147,7 @@
       <div class="credits-body">
         <p><b>EUROBEAT DRIFT LEGEND — Gunma Downhill</b></p>
         <p>Dibuat dengan Vite · TypeScript · Three.js · Web Audio API.<br/>Semua aset digambar &amp; disintesis prosedural di perangkatmu. Tanpa server, tanpa aset eksternal.</p>
-        <p>Brand mobil fiktif: HACHI 86 · FD-7 SAVANNA · EK-9 TYPE-R · NISSAN-KAI S13.<br/>Musik: Eurobeat sintetis asli (bukan lagu berlisensi).</p>
+        <p>Mobil orisinal: TOFU RUNNER · FD-7 SAVANNA · EK-9 TYPE-R · KAI S13.<br/>Musik: Eurobeat sintetis asli (bukan lagu berlisensi).</p>
         <p class="credits-homage">Untuk semua yang pernah menonton touge di layar CRT tengah malam.<br/>“Yokoso. Yoru no touge e——”</p>
       </div>
       <div class="panel-foot"><button class="menu-btn" id="btn-credits-back">◀ KEMBALI</button></div>

@@ -1,5 +1,7 @@
 // Cheats.ts — SINGLE SOURCE OF TRUTH for every cheat flag (spec §13A).
 // All systems read from here. No scattered `if (cheat)` checks elsewhere.
+import { Capacitor } from '@capacitor/core';
+import { Preferences } from '@capacitor/preferences';
 
 export type AutoDriveProfile = 'chill' | 'normal' | 'pro';
 export type DriveLineStyle = 'speed' | 'apex' | 'gear' | 'ghost';
@@ -66,19 +68,26 @@ export function resolveCheatConflicts(f: CheatFlags): CheatFlags {
   return f;
 }
 
-export function loadCheats() {
+export async function loadCheats(): Promise<void> {
   try {
-    const raw = localStorage.getItem(KEY);
+    let raw: string | null = null;
+    if (Capacitor.isNativePlatform()) {
+      try { raw = (await Preferences.get({ key: KEY })).value; } catch { /* browser fallback */ }
+    }
+    if (!raw) { try { raw = localStorage.getItem(KEY); } catch { /* unavailable */ } }
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<CheatFlags>;
       Object.assign(cheats, { ...DEFAULT_CHEATS, ...parsed });
       resolveCheatConflicts(cheats);
+      if (Capacitor.isNativePlatform()) await Preferences.set({ key: KEY, value: JSON.stringify(cheats) }).catch(() => undefined);
     }
-  } catch { /* ignore */ }
+  } catch { /* ignore corrupt values */ }
 }
 
-export function persistCheats() {
-  try { localStorage.setItem(KEY, JSON.stringify(cheats)); } catch { /* ignore */ }
+export async function persistCheats(): Promise<void> {
+  const value = JSON.stringify(cheats);
+  try { localStorage.setItem(KEY, value); } catch { /* ignore */ }
+  if (Capacitor.isNativePlatform()) { try { await Preferences.set({ key: KEY, value }); } catch { /* localStorage fallback remains */ } }
 }
 
 export function setCheatFlag<K extends keyof CheatFlags>(key: K, value: CheatFlags[K], source = 'ui') {

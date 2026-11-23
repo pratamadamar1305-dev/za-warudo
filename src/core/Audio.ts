@@ -2,6 +2,8 @@
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private master: GainNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+  private musicFilter: BiquadFilterNode | null = null;
   private music: GainNode | null = null;
   private sfx: GainNode | null = null;
   private engineOsc: OscillatorNode | null = null;
@@ -10,13 +12,23 @@ export class AudioEngine {
   private step = 0;
   private nextTime = 0;
   private bpm = 156;
-  private musicVol = 0.8;
-  private sfxVol = 0.9;
+  private musicVol = 0.55;
+  private sfxVol = 0.85;
+  private audioMode: 'speaker' | 'headphones' = 'speaker';
   private muted = false;
   private readonly melody = [76, 79, 83, 86, 83, 79, 76, 74, 76, 79, 83, 88, 86, 83, 79, 74];
   private readonly bass = [40, 40, 47, 40, 43, 43, 50, 43, 36, 36, 43, 36, 38, 38, 45, 38];
 
   setVolumes(music: number, sfx: number) { this.musicVol = music / 100; this.sfxVol = sfx / 100; this.applyVolumes(); }
+  setMode(mode: 'speaker' | 'headphones') {
+    this.audioMode = mode;
+    if (this.musicFilter && this.compressor && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.musicFilter.frequency.setTargetAtTime(mode === 'speaker' ? 60 : 24, now, 0.12);
+      this.compressor.threshold.setTargetAtTime(mode === 'speaker' ? -22 : -10, now, 0.12);
+      this.compressor.ratio.setTargetAtTime(mode === 'speaker' ? 8 : 3, now, 0.12);
+    }
+  }
   setBpm(bpm: number) { this.bpm = Math.max(120, Math.min(190, bpm)); }
   setMuted(muted: boolean) { this.muted = muted; this.applyVolumes(); }
 
@@ -24,9 +36,14 @@ export class AudioEngine {
     if (!this.ctx) {
       const Ctx = window.AudioContext;
       if (!Ctx) return;
-      this.ctx = new Ctx();
-      this.master = this.ctx.createGain(); this.master.connect(this.ctx.destination);
-      this.music = this.ctx.createGain(); this.music.connect(this.master);
+      this.ctx = new Ctx({ latencyHint: 'interactive' });
+      this.master = this.ctx.createGain(); this.master.gain.value = 0;
+      this.compressor = this.ctx.createDynamicsCompressor(); this.master.connect(this.compressor);
+      this.compressor.connect(this.ctx.destination);
+      this.music = this.ctx.createGain();
+      this.musicFilter = this.ctx.createBiquadFilter(); this.musicFilter.type = 'highpass';
+      this.musicFilter.frequency.value = this.audioMode === 'speaker' ? 60 : 24;
+      this.music.connect(this.musicFilter); this.musicFilter.connect(this.master);
       this.sfx = this.ctx.createGain(); this.sfx.connect(this.master);
       const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 850; filter.connect(this.sfx);
       this.engineGain = this.ctx.createGain(); this.engineGain.gain.value = 0.0001; this.engineGain.connect(filter);
@@ -34,16 +51,26 @@ export class AudioEngine {
       this.nextTime = this.ctx.currentTime + 0.1;
       this.timer = window.setInterval(() => this.schedule(), 35);
     }
+    const wasSuspended = this.ctx.state === 'suspended';
     await this.ctx.resume();
+    if (wasSuspended) this.nextTime = this.ctx.currentTime + 0.08;
     this.applyVolumes();
+  }
+
+  async suspend() {
+    if (!this.ctx || this.ctx.state === 'suspended') return;
+    if (this.master) this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.12);
+    await new Promise(resolve => setTimeout(resolve, 140));
+    await this.ctx.suspend();
   }
 
   private applyVolumes() {
     if (!this.ctx || !this.master || !this.music || !this.sfx) return;
     const now = this.ctx.currentTime, mute = this.muted ? 0 : 1;
-    this.master.gain.setTargetAtTime(mute, now, 0.04);
-    this.music.gain.setTargetAtTime(this.musicVol, now, 0.04);
-    this.sfx.gain.setTargetAtTime(this.sfxVol, now, 0.04);
+    this.master.gain.setTargetAtTime(mute, now, 0.12);
+    this.music.gain.setTargetAtTime(this.musicVol, now, 0.12);
+    this.sfx.gain.setTargetAtTime(this.sfxVol, now, 0.12);
+    if (this.musicFilter && this.compressor) this.setMode(this.audioMode);
   }
 
   update(speedKmh: number, bpm = this.bpm) {
@@ -67,7 +94,7 @@ export class AudioEngine {
   }
 
   private schedule() {
-    const ctx = this.ctx; if (!ctx || !this.music) return;
+    const ctx = this.ctx; if (!ctx || !this.music || ctx.state !== 'running') return;
     const beat = 60 / this.bpm / 2;
     while (this.nextTime < ctx.currentTime + 0.12) {
       const t = this.nextTime, i = this.step % 16;

@@ -11,6 +11,14 @@ import { AutoDrive } from './sim/AutoDrive';
 import { DriftScore } from './sim/DriftScore';
 import { RaceLogic, RacerEntry } from './sim/RaceLogic';
 import { CARS, carById, MU_DRY, MU_WET, PhysicsEnv, VehiclePhysics } from './sim/VehiclePhysics';
+import { App } from '@capacitor/app';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+import { Haptics } from '@capacitor/haptics';
+import { StatusBar } from '@capacitor/status-bar';
+import type { SteeringMode } from './core/Input';
+
+interface GameNativePlugin { setRaceActive(options: { active: boolean }): Promise<{ active: boolean }>; }
+const GameNative = registerPlugin<GameNativePlugin>('GameNative');
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const spline = new TrackSpline();
@@ -18,8 +26,6 @@ const canvas = $('game-canvas') as HTMLCanvasElement;
 const game = new GameScene(canvas, spline);
 const input = new InputController();
 const audio = new AudioEngine();
-loadSave(); loadCheats();
-audio.setVolumes(save.settings.volMusic, save.settings.volSfx);
 let player = new VehiclePhysics(carById(save.selectedCar));
 const attractPlayer = new VehiclePhysics(carById('hachi86'));
 const attractAuto = new AutoDrive(spline); attractAuto.setMode('pro');
@@ -28,9 +34,18 @@ let rivalMeshes: THREE.Group[] = [];
 let logic = new RaceLogic(spline);
 let auto = new AutoDrive(spline);
 let drift = new DriftScore();
-let raceLive = false, paused = false, last = performance.now(), raceSeed = 0, runTime = 0;
-let camIndex = 0, toastTimer = 0, muted = false, lastWallSfx = 0;
-const held = new Map<string, boolean>();
+let raceLive = false, paused = false, appActive = true, last = performance.now(), raceSeed = 0, runTime = 0;
+let camIndex = 0, toastTimer = 0, muted = false, lastWallSfx = 0, wasBigDrift = false, pauseBackDeadline = 0;
+let rafPending = false;
+
+async function setNativeRaceActive(active: boolean) {
+  if (!Capacitor.isNativePlatform()) return;
+  try { await GameNative.setRaceActive({ active }); } catch { /* native helper unavailable in browser */ }
+}
+async function haptic(duration: number) {
+  if (!save.settings.haptics || !Capacitor.isNativePlatform()) return;
+  try { await Haptics.vibrate({ duration }); } catch { /* haptics may be disabled by system policy */ }
+}
 
 const baseEnv = (): PhysicsEnv => ({ mu: cheats.weather === 'rain' ? MU_WET : MU_DRY, gripMul: cheats.gripMul, noSpin: cheats.noSpin, ghostMode: cheats.ghostMode, infiniteBoost: cheats.infiniteBoost, assists: { ...save.settings.assists }, upgrades: { ...getUpgrades(save.selectedCar) }, tuningPreset: save.tuningPreset, paceTorqueMul: auto.paceTorqueMul });
 const setScreen = (name: string) => document.querySelectorAll('.screen').forEach(x => x.classList.toggle('active', x.id === `screen-${name}`));
@@ -58,6 +73,7 @@ function setupRace() {
   rivalMeshes = opponents.map((o, i) => game.addRival(CARS.find(c => c.id === o.def.carId)?.color ?? o.def.color));
   const entries: RacerEntry[] = [{ id: 'player', name: 'YOU', isPlayer: true, s: player.state.s, speedMs: 0, finished: false, finishTime: 0, sectorIdx: 0, sectorStartTime: 0 }, ...opponents.map(o => ({ id: o.def.id, name: o.def.name, isPlayer: false, s: o.physics.state.s, speedMs: 0, finished: false, finishTime: 0, sectorIdx: 0, sectorStartTime: 0 }))];
   logic = new RaceLogic(spline); logic.reset(entries); drift.reset(); runTime = 0; raceLive = true; paused = false;
+  void setNativeRaceActive(true);
   $('hud').classList.remove('hidden'); $('touch-ui').classList.toggle('hidden', !('ontouchstart' in window));
   $('hud-dirty').classList.toggle('hidden', !isDirtyRace()); $('hud-ad-badge').classList.toggle('hidden', !cheats.autoDrive);
   setScreen('');
@@ -65,7 +81,7 @@ function setupRace() {
 
 function finishRace() {
   if (!raceLive) return;
-  raceLive = false; $('hud').classList.add('hidden'); $('touch-ui').classList.add('hidden'); setScreen('results');
+  raceLive = false; void setNativeRaceActive(false); $('hud').classList.add('hidden'); $('touch-ui').classList.add('hidden'); setScreen('results');
   const pos = logic.playerPosition, dirty = isDirtyRace();
   const prize = pos === 1 ? 5000 : pos === 2 ? 3000 : pos === 3 ? 1800 : 900;
   const best = save.bestTime === null ? runTime : Math.min(save.bestTime, runTime);
@@ -119,12 +135,21 @@ function populateSettings() {
   const s = save.settings;
   ($('set-vol-music') as HTMLInputElement).value = String(s.volMusic); ($('set-vol-sfx') as HTMLInputElement).value = String(s.volSfx);
   ($('set-quality') as HTMLSelectElement).value = s.quality; ($('set-cam-sens') as HTMLInputElement).value = String(s.camSens);
+  ($('set-steering') as HTMLSelectElement).value = s.steeringMode; ($('set-audio-mode') as HTMLSelectElement).value = s.audioMode;
+  ($('set-haptics') as HTMLInputElement).checked = s.haptics;
+  input.setSteeringMode(s.steeringMode, s.tiltZero);
+  $('touch-ui').classList.toggle('tilt-mode', s.steeringMode === 'tilt');
   ($('set-motion-reduce') as HTMLInputElement).checked = s.motionReduce; ($('set-subtitles') as HTMLInputElement).checked = s.subtitles;
   ($('set-invert-y') as HTMLInputElement).checked = s.invertY; ($('set-assist-steer') as HTMLInputElement).checked = s.assists.steer;
   ($('set-assist-brake') as HTMLInputElement).checked = s.assists.brake; ($('set-assist-recover') as HTMLInputElement).checked = s.assists.recover; ($('set-assist-drift') as HTMLInputElement).checked = s.assists.drift;
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('#screen-settings input, #screen-settings select').forEach(el => el.onchange = () => {
     s.volMusic = +($('set-vol-music') as HTMLInputElement).value; s.volSfx = +($('set-vol-sfx') as HTMLInputElement).value;
     s.quality = ($('set-quality') as HTMLSelectElement).value as typeof s.quality; s.camSens = +($('set-cam-sens') as HTMLInputElement).value;
+    s.steeringMode = ($('set-steering') as HTMLSelectElement).value as SteeringMode;
+    s.audioMode = ($('set-audio-mode') as HTMLSelectElement).value as typeof s.audioMode;
+    s.haptics = ($('set-haptics') as HTMLInputElement).checked;
+    input.setSteeringMode(s.steeringMode, s.tiltZero); $('touch-ui').classList.toggle('tilt-mode', s.steeringMode === 'tilt');
+    audio.setMode(s.audioMode);
     s.motionReduce = ($('set-motion-reduce') as HTMLInputElement).checked; s.subtitles = ($('set-subtitles') as HTMLInputElement).checked; s.invertY = ($('set-invert-y') as HTMLInputElement).checked;
     s.assists.steer = ($('set-assist-steer') as HTMLInputElement).checked; s.assists.brake = ($('set-assist-brake') as HTMLInputElement).checked;
     s.assists.recover = ($('set-assist-recover') as HTMLInputElement).checked; s.assists.drift = ($('set-assist-drift') as HTMLInputElement).checked; persistSave();
@@ -162,12 +187,26 @@ function updateHUD(dt: number) {
   void corner;
 }
 
-function togglePause() { if(!raceLive)return; paused=!paused; setScreen(paused?'pause':''); if(paused) $('hud').classList.add('hidden'); else $('hud').classList.remove('hidden'); }
+function togglePause() {
+  if (!raceLive) return;
+  paused = !paused; pauseBackDeadline = 0;
+  setScreen(paused ? 'pause' : '');
+  $('hud').classList.toggle('hidden', paused); $('touch-ui').classList.toggle('hidden', paused || !('ontouchstart' in window));
+  void setNativeRaceActive(!paused);
+}
 function bind(id: string, fn: () => void) { $(id).addEventListener('click',fn); }
-bind('boot-tap',()=>{ void audio.start(); setScreen('menu'); }); bind('btn-start-race',()=>{setScreen('dialog'); $('dialog-name').textContent='RYO'; $('dialog-text').textContent='Yokoso, Gunma no yoru e. Tunjukkan line terbaikmu di downhill!'; $('dialog-race-btn').classList.remove('hidden');});
+const unlockAudio = () => { void audio.start().catch(() => undefined); };
+document.addEventListener('pointerdown', unlockAudio, { passive: true });
+document.addEventListener('touchend', unlockAudio, { passive: true });
+bind('boot-tap',()=>{ void audio.start().catch(()=>undefined); setScreen('menu'); }); bind('btn-start-race',()=>{setScreen('dialog'); $('dialog-name').textContent='RYO'; $('dialog-text').textContent='Yokoso, Gunma no yoru e. Tunjukkan line terbaikmu di downhill!'; $('dialog-race-btn').classList.remove('hidden');});
 bind('dialog-race-btn',()=>{setupRace();}); bind('btn-garage',()=>{renderGarage();setScreen('garage')}); bind('btn-garage-back',()=>setScreen('menu'));bind('btn-garage-race',()=>setupRace());
-bind('btn-settings',()=>{populateSettings();setScreen('settings')});bind('btn-settings-back',()=>setScreen('menu'));bind('btn-credits',()=>setScreen('credits'));bind('btn-credits-back',()=>setScreen('menu'));
-bind('btn-pause-resume',()=>togglePause()); bind('btn-pause-restart',()=>setupRace());bind('btn-pause-quit',()=>{raceLive=false;paused=false;$('hud').classList.add('hidden');setScreen('menu');refreshMenu()});bind('hud-pause-btn',togglePause);
+bind('btn-settings',()=>{populateSettings();setScreen('settings')});bind('btn-settings-back',()=>setScreen('menu'));
+bind('btn-tilt-calibrate',()=>$('tilt-calibration').classList.remove('hidden'));
+bind('btn-calibrate-tilt',()=>{void input.calibrateTilt().then(value=>{if(value===null){showToast('Sensor belum terbaca — gerakkan ponsel lalu coba lagi');return;}save.settings.tiltZero=value;persistSave();input.setSteeringMode(save.settings.steeringMode,value);$('tilt-calibration').classList.add('hidden');showToast('TILT TERKALIBRASI');});});
+bind('btn-tilt-reset',()=>{input.resetTilt();save.settings.tiltZero=null;persistSave();input.setSteeringMode(save.settings.steeringMode,null);showToast('KALIBRASI TILT DIRESET');});
+bind('btn-tilt-close',()=> $('tilt-calibration').classList.add('hidden'));
+bind('btn-credits',()=>setScreen('credits'));bind('btn-credits-back',()=>setScreen('menu'));
+bind('btn-pause-resume',()=>togglePause()); bind('btn-pause-restart',()=>setupRace());bind('btn-pause-quit',()=>{raceLive=false;paused=false;void setNativeRaceActive(false);$('hud').classList.add('hidden');$('touch-ui').classList.add('hidden');setScreen('menu');refreshMenu()});bind('hud-pause-btn',togglePause);
 bind('btn-results-menu',()=>setScreen('menu'));bind('btn-results-again',()=>setupRace());
 
 // Touch buttons use the same input path as keyboard and controller.
@@ -197,7 +236,38 @@ window.addEventListener('keydown',e=>{
   if(e.code==='Space'&&$('screen-dialog').classList.contains('active'))setupRace();
 });
 
-function frame(now:number){requestAnimationFrame(frame);let dt=Math.min(.05,(now-last)/1000);last=now;
+let backgrounded = false;
+void App.addListener('backButton', () => {
+  if (raceLive && !paused) { togglePause(); return; }
+  if (paused) {
+    const now = Date.now();
+    if (pauseBackDeadline && now <= pauseBackDeadline) { pauseBackDeadline = 0; void App.exitApp(); }
+    else { pauseBackDeadline = now + 2000; showToast('Tekan kembali lagi dalam 2 detik untuk keluar'); }
+    return;
+  }
+  if (window.confirm('Keluar game?')) void App.exitApp();
+});
+void App.addListener('appStateChange', ({ isActive }) => {
+  if (!isActive) {
+    backgrounded = true; appActive = false; rafPending = false; game.resetFrameClock();
+    void Promise.all([persistSave(), persistCheats()]);
+    if (raceLive) {
+      paused = true; setScreen('pause'); $('hud').classList.add('hidden'); $('touch-ui').classList.add('hidden');
+      void setNativeRaceActive(false);
+    }
+    void audio.suspend();
+  } else {
+    if (!backgrounded) return;
+    backgrounded = false; appActive = true; last = performance.now(); game.resetFrameClock();
+    void audio.start().catch(() => undefined); scheduleFrame();
+  }
+});
+
+function scheduleFrame() { if (appActive && !rafPending) { rafPending = true; requestAnimationFrame(frame); } }
+function frame(now:number){
+  rafPending = false;
+  if (!appActive) return;
+  let dt=Math.min(.05,(now-last)/1000);last=now;
   if(raceLive&&!paused){dt*=cheats.slowmo;const c=input.read();let intent;
     if(cheats.autoDrive){const p=player.state,near=spline.nearest(p.x,p.z,p.s);const brainState={x:p.x,y:p.y,z:p.z,heading:p.heading,vx:p.vx,vz:p.vz,speedMs:p.speedMs,slipAngle:p.beta,yawRate:p.yawRate,gear:p.gear,rpm:p.rpm,s:p.s,lateral:p.lateral};const others=opponents.map(o=>{const q=o.physics.state;return{x:q.x,y:q.y,z:q.z,heading:q.heading,vx:q.vx,vz:q.vz,speedMs:q.speedMs,slipAngle:q.beta,yawRate:q.yawRate,gear:q.gear,rpm:q.rpm,s:q.s,lateral:q.lateral};});intent=auto.update(brainState,dt,others,(cheats.weather==='rain'?MU_WET:MU_DRY)*cheats.gripMul*auto.gripEnvelope,c.active,logic.gapToLeader,spline.finishS-p.s,showToast)??c;
     }else intent=c;
@@ -209,8 +279,11 @@ function frame(now:number){requestAnimationFrame(frame);let dt=Math.min(.05,(now
     const entries=logic.entries;entries[0].s=player.state.s;entries[0].speedMs=player.state.speedMs;opponents.forEach((o,i)=>{entries[i+1].s=o.physics.state.s;entries[i+1].speedMs=o.physics.state.speedMs;});
     logic.update(dt,cheats.freezeTimer);if(logic.phase==='racing')runTime=logic.raceTime;
     drift.update(dt,player.slipDeg,player.state.speedKmh,player.events.hitWall,cheats.scoreMul);
-    if(player.events.hitWall){auto.notifyCollision();if(now-lastWallSfx>350){audio.collision(player.events.hitIntensity);lastWallSfx=now;}}
-    if(player.events.shifted)audio.shift(); if(player.events.gutterEntered)audio.gutter(); updateHUD(dt);
+    if(player.events.hitWall){auto.notifyCollision();if(now-lastWallSfx>350){audio.collision(player.events.hitIntensity);lastWallSfx=now;void haptic(35);}}
+    if(player.events.shifted){audio.shift();void haptic(12);}
+    const bigDrift=Math.abs(player.slipDeg)>28 && player.state.speedKmh>55;
+    if(bigDrift&&!wasBigDrift)void haptic(12); wasBigDrift=bigDrift;
+    if(player.events.gutterEntered)audio.gutter(); updateHUD(dt);
     if(logic.phase==='finished')finishRace();
   }
   audio.update(raceLive&&!paused?player.state.speedKmh:0, cheats.bpmOverride ?? 156);
@@ -222,6 +295,20 @@ function frame(now:number){requestAnimationFrame(frame);let dt=Math.min(.05,(now
     const env=baseEnv();env.mu=MU_DRY*attractAuto.gripEnvelope;env.paceTorqueMul=attractAuto.paceTorqueMul;env.gripMul=1;
     attractPlayer.step(demoIntent,dt,spline,env);game.update(attractPlayer,[],Math.max(.001,dt));
   }
+  scheduleFrame();
 }
 
-refreshMenu();requestAnimationFrame(frame);
+async function initializeGame() {
+  await Promise.all([loadSave(), loadCheats()]);
+  player = new VehiclePhysics(carById(save.selectedCar));
+  input.setSteeringMode(save.settings.steeringMode, save.settings.tiltZero);
+  audio.setVolumes(save.settings.volMusic, save.settings.volSfx);
+  audio.setMode(save.settings.audioMode);
+  refreshMenu();
+  if (Capacitor.isNativePlatform()) {
+    void StatusBar.hide().catch(() => undefined);
+  }
+  positionCar(attractPlayer, spline.startS, 0, 16);
+  scheduleFrame();
+}
+void initializeGame();

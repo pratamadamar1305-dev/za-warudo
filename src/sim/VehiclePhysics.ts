@@ -32,7 +32,7 @@ export interface CarParams {
 
 export const CARS: CarParams[] = [
   {
-    id: 'hachi86', name: 'HACHI 86', brand: 'HACHI', drive: 'RWD',
+    id: 'hachi86', name: 'TOFU RUNNER', brand: 'GUNMA', drive: 'RWD',
     mass: 940, wheelbase: 2.4, trackWidth: 1.35, cgHeight: 0.52, yawInertia: 1250,
     gears: [3.58, 2.02, 1.38, 1.0, 0.79], finalDrive: 4.3, redline: 7800,
     powerHp: 130, torqueNm: 149, maxSteerDeg: 34, grip: 1.0,

@@ -35,7 +35,7 @@ jobs:
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon assembleDebug -PVERSION_CODE=${GITHUB_RUN_NUMBER} -PVERSION_NAME=1.0.${GITHUB_RUN_NUMBER}
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
