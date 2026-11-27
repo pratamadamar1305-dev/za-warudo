@@ -70,7 +70,25 @@ local function getBestMove(fen)
 		return nil, "Response engine tidak valid"
 	end
 
-	return data.bestmove, data.evaluation
+	return data.bestmove, data.evaluation, data.mate, data.continuation
+end
+
+---Format evaluation or mate score into a readable Indonesian summary.
+---@param eval number?
+---@param mate number?
+---@return string
+local function formatEvaluation(eval, mate)
+	if mate ~= nil then
+		local side = mate > 0 and "Putih" or "Hitam"
+		return string.format("Mate dalam %d (%s)", math.abs(mate), side)
+	end
+
+	if typeof(eval) == "number" then
+		local side = eval > 0 and "Putih unggul" or (eval < 0 and "Hitam unggul" or "Seimbang")
+		return string.format("%+.2f (%s)", eval, side)
+	end
+
+	return tostring(eval or "?")
 end
 
 ---Attempt to locate a valid FEN string in PlayerGui attributes, StringValues, or TextLabels.
@@ -117,18 +135,29 @@ local function createRayfieldUI()
 		Content = "Best Move: --\nEvaluasi: --\nFEN: --",
 	})
 
-	local function updateResult(fen, bestMove, eval)
+	local function updateResult(fen, bestMove, eval, mate, continuation)
+		local evalText = formatEvaluation(eval, mate)
 		RoChessHelper.lastBestMove = bestMove or ""
-		RoChessHelper.lastEval = tostring(eval or "?")
+		RoChessHelper.lastEval = evalText
+
 		statusParagraph:Set({
-			Title = "Hasil Analisa",
+			Title = "Rekomendasi Stockfish",
 			Content = string.format(
-				"Best Move: %s\nEvaluasi: %s\nFEN: %s",
+				"Best Move: %s\nEvaluasi: %s\nLanjutan: %s\nFEN: %s",
 				tostring(bestMove or "--"),
-				tostring(eval or "--"),
+				evalText,
+				tostring(continuation or "--"),
 				fen
 			),
 		})
+
+		if RoChessHelper.notifyOnMove and bestMove then
+			Rayfield:Notify({
+				Title = "Rekomendasi: " .. tostring(bestMove),
+				Content = evalText,
+				Duration = 3,
+			})
+		end
 	end
 
 	local function analyzeFen(fen)
@@ -137,13 +166,13 @@ local function createRayfieldUI()
 		end
 
 		statusParagraph:Set({
-			Title = "Hasil Analisa",
+			Title = "Rekomendasi Stockfish",
 			Content = "Menghitung langkah terbaik...",
 		})
 
-		local bestMove, eval = getBestMove(fen)
+		local bestMove, eval, mate, continuation = getBestMove(fen)
 		if bestMove then
-			updateResult(fen, bestMove, eval)
+			updateResult(fen, bestMove, eval, mate, continuation)
 		else
 			statusParagraph:Set({
 				Title = "Error",
@@ -158,6 +187,15 @@ local function createRayfieldUI()
 		Flag = "AutoDetectFEN",
 		Callback = function(value)
 			RoChessHelper.autoDetect = value
+		end,
+	})
+
+	mainTab:CreateToggle({
+		Name = "Notifikasi Best Move",
+		CurrentValue = RoChessHelper.notifyOnMove,
+		Flag = "NotifyBestMove",
+		Callback = function(value)
+			RoChessHelper.notifyOnMove = value
 		end,
 	})
 
