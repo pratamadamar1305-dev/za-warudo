@@ -18,10 +18,12 @@ local RoChessHelper = {
 }
 
 -- Constants.
-local ENGINE_URL = "https://stockfish.online/api/s/v2.php"
+local STOCKFISH_ONLINE_URL = "https://stockfish.online/api/s/v2.php"
+local CHESS_API_URL = "https://chess-api.com/v1"
 local RAYFIELD_URL = "https://sirius.menu/rayfield"
 local FEN_PATTERN = "^[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+%s+[wb]%s+"
-local BLUE_HIGHLIGHT_COLOR = Color3.fromRGB(0, 120, 255)
+local BLUE_FILL_COLOR = Color3.fromRGB(0, 120, 255)
+local BLUE_OUTLINE_COLOR = Color3.fromRGB(80, 190, 255)
 
 -- Services.
 local playersService = game:GetService("Players")
@@ -41,20 +43,37 @@ local function clearHighlights()
 	table.clear(RoChessHelper.highlights)
 end
 
+---Check if an Instance represents a specific algebraic chess square (e.g. "e2").
+---@param obj Instance
+---@param lowerName string
+---@return boolean
+local function isMatchingSquare(obj, lowerName)
+	local nameLower = string.lower(obj.Name)
+	if nameLower == lowerName then
+		return true
+	end
+
+	local attrSquare = obj:GetAttribute("Square") or obj:GetAttribute("Tile") or obj:GetAttribute("Coord")
+	if typeof(attrSquare) == "string" and string.lower(attrSquare) == lowerName then
+		return true
+	end
+
+	return false
+end
+
 ---Highlight a 3D BasePart or 2D GuiObject square in blue.
 ---@param squareName string
 local function highlightSquare(squareName)
 	local lowerName = string.lower(squareName)
-	local upperName = string.upper(squareName)
 
-	-- Check 3D board tiles in workspace.
+	-- Highlight 3D board tiles in workspace.
 	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") and (obj.Name == lowerName or obj.Name == upperName) then
+		if obj:IsA("BasePart") and isMatchingSquare(obj, lowerName) then
 			local box = Instance.new("SelectionBox")
-			box.Name = "RoChessBlueHighlight"
-			box.Color3 = BLUE_HIGHLIGHT_COLOR
-			box.SurfaceColor3 = BLUE_HIGHLIGHT_COLOR
-			box.SurfaceTransparency = 0.45
+			box.Name = "RoChessBlueBox"
+			box.Color3 = BLUE_OUTLINE_COLOR
+			box.SurfaceColor3 = BLUE_FILL_COLOR
+			box.SurfaceTransparency = 0.4
 			box.LineThickness = 0.06
 			box.Adornee = obj
 			box.Parent = obj
@@ -62,19 +81,25 @@ local function highlightSquare(squareName)
 		end
 	end
 
-	-- Check 2D board tiles in PlayerGui.
+	-- Highlight 2D board tiles in PlayerGui.
 	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
 	if playerGui then
 		for _, obj in ipairs(playerGui:GetDescendants()) do
-			if obj:IsA("GuiObject") and (obj.Name == lowerName or obj.Name == upperName) then
+			if obj:IsA("GuiObject") and isMatchingSquare(obj, lowerName) then
 				local overlay = Instance.new("Frame")
-				overlay.Name = "RoChessBlueHighlight"
+				overlay.Name = "RoChessBlueOverlay"
 				overlay.Size = UDim2.fromScale(1, 1)
-				overlay.BackgroundColor3 = BLUE_HIGHLIGHT_COLOR
+				overlay.BackgroundColor3 = BLUE_FILL_COLOR
 				overlay.BackgroundTransparency = 0.45
 				overlay.BorderSizePixel = 0
 				overlay.ZIndex = obj.ZIndex + 10
 				overlay.Parent = obj
+
+				local stroke = Instance.new("UIStroke")
+				stroke.Color = BLUE_OUTLINE_COLOR
+				stroke.Thickness = 2
+				stroke.Parent = overlay
+
 				table.insert(RoChessHelper.highlights, overlay)
 			end
 		end
@@ -112,6 +137,10 @@ local function scanContainerForFen(container)
 		if obj:IsA("StringValue") and string.match(obj.Value, FEN_PATTERN) then
 			return obj.Value
 		end
+
+		if obj:IsA("TextLabel") and string.match(obj.Text, FEN_PATTERN) then
+			return obj.Text
+		end
 	end
 
 	return nil
@@ -135,7 +164,17 @@ local function findBoardFen()
 	return scanContainerForFen(playerGui) or scanContainerForFen(replicatedStorage)
 end
 
----Query Stockfish API for the best move given a FEN string.
+---Extract clean UCI move (e.g. "e2e4") from engine output.
+---@param rawMove string?
+---@return string?
+local function parseUciMove(rawMove)
+	if typeof(rawMove) ~= "string" then
+		return nil
+	end
+	return string.match(rawMove, "([a-h][1-8][a-h][1-8][qrbn]?)")
+end
+
+---Query Stockfish API (with chess-api.com fallback) for the best move.
 ---@param fen string
 ---@return string?, string?
 local function getBestMove(fen)
@@ -143,22 +182,42 @@ local function getBestMove(fen)
 		return nil, "HTTP request tidak tersedia"
 	end
 
+	-- Primary: stockfish.online
 	local encodedFen = httpService:UrlEncode(fen)
 	local okReq, response = pcall(httpRequest, {
-		Url = string.format("%s?fen=%s&depth=%d", ENGINE_URL, encodedFen, RoChessHelper.depth),
+		Url = string.format("%s?fen=%s&depth=%d", STOCKFISH_ONLINE_URL, encodedFen, RoChessHelper.depth),
 		Method = "GET",
 	})
 
-	if not okReq or not response or not response.Success then
-		return nil, "HTTP request gagal"
+	if okReq and response and response.Success and response.Body then
+		local okJson, data = pcall(httpService.JSONDecode, httpService, response.Body)
+		if okJson and data and data.success and data.bestmove then
+			local move = parseUciMove(data.bestmove)
+			if move then
+				return move, nil
+			end
+		end
 	end
 
-	local okJson, data = pcall(httpService.JSONDecode, httpService, response.Body)
-	if not okJson or not data or not data.success then
-		return nil, "Response engine tidak valid"
+	-- Fallback: chess-api.com
+	local okFb, fbResponse = pcall(httpRequest, {
+		Url = CHESS_API_URL,
+		Method = "POST",
+		Headers = { ["Content-Type"] = "application/json" },
+		Body = httpService:JSONEncode({ fen = fen, depth = 12 }),
+	})
+
+	if okFb and fbResponse and fbResponse.Success and fbResponse.Body then
+		local okJson, data = pcall(httpService.JSONDecode, httpService, fbResponse.Body)
+		if okJson and data and data.move then
+			local move = parseUciMove(data.move)
+			if move then
+				return move, nil
+			end
+		end
 	end
 
-	return data.bestmove, nil
+	return nil, "Gagal mengambil langkah dari engine"
 end
 
 ---Load Rayfield UI library using the executor's request function.
@@ -201,7 +260,6 @@ local function createRayfieldUI()
 	})
 
 	local mainTab = Window:CreateTab("Main", 4483362458)
-
 	local statusLabel = mainTab:CreateLabel("Best Move: --")
 
 	mainTab:CreateButton({
@@ -217,7 +275,7 @@ local function createRayfieldUI()
 			local fen = findBoardFen()
 			if not fen then
 				RoChessHelper.isAnalyzing = false
-				statusLabel:Set("Best Move: FEN papan tidak ditemukan")
+				statusLabel:Set("Best Move: FEN tidak ditemukan")
 				return
 			end
 
@@ -225,8 +283,13 @@ local function createRayfieldUI()
 			RoChessHelper.isAnalyzing = false
 
 			if bestMove then
-				statusLabel:Set("Best Move: " .. tostring(bestMove))
+				statusLabel:Set("Best Move: " .. bestMove)
 				highlightMove(bestMove)
+				Rayfield:Notify({
+					Title = "Best Move",
+					Content = bestMove,
+					Duration = 3,
+				})
 			else
 				statusLabel:Set("Error: " .. tostring(err))
 			end
