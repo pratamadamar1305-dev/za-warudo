@@ -12,19 +12,44 @@ getfenv().PP_SCRAMBLE_RE_NUM = function(...) return ... end
 
 local RoChessHelper = {
 	enabled = true,
-	depth = 12,
+	autoDetect = true,
+	depth = 14,
+	pollInterval = 0.75,
 	lastFen = "",
+	lastBestMove = "",
+	lastEval = "",
 }
 
 -- Constants.
 local ENGINE_URL = "https://stockfish.online/api/s/v2.php"
+local RAYFIELD_URL = "https://sirius.menu/rayfield"
+local FEN_PATTERN = "^[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+%s+[wb]%s+"
 
 -- Services.
 local playersService = game:GetService("Players")
 local httpService = game:GetService("HttpService")
-local coreGui = game:GetService("CoreGui")
 
 local localPlayer = playersService.LocalPlayer
+
+---Load Rayfield UI library using the executor's request function.
+---@return table
+local function loadRayfield()
+	local response = request({
+		Url = RAYFIELD_URL,
+		Method = "GET",
+	})
+
+	if not response or not response.Success or not response.Body then
+		error("Gagal memuat Rayfield UI.")
+	end
+
+	local chunk, err = loadstring(response.Body)
+	if not chunk then
+		error("Gagal compile Rayfield: " .. tostring(err))
+	end
+
+	return chunk()
+end
 
 ---Query Stockfish API for the best move given a FEN string.
 ---@param fen string
@@ -37,18 +62,18 @@ local function getBestMove(fen)
 	})
 
 	if not response or not response.Success then
-		return nil, "HTTP request failed"
+		return nil, "HTTP request gagal"
 	end
 
 	local ok, data = pcall(httpService.JSONDecode, httpService, response.Body)
 	if not ok or not data or not data.success then
-		return nil, "Invalid engine response"
+		return nil, "Response engine tidak valid"
 	end
 
 	return data.bestmove, data.evaluation
 end
 
----Attempt to locate a FEN string in PlayerGui attributes.
+---Attempt to locate a valid FEN string in PlayerGui attributes, StringValues, or TextLabels.
 ---@return string?
 local function findBoardFen()
 	local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
@@ -57,101 +82,143 @@ local function findBoardFen()
 	end
 
 	for _, obj in ipairs(playerGui:GetDescendants()) do
-		local fenAttr = obj:GetAttribute("FEN") or obj:GetAttribute("Fen")
-		if typeof(fenAttr) == "string" and #fenAttr > 10 then
+		local fenAttr = obj:GetAttribute("FEN") or obj:GetAttribute("Fen") or obj:GetAttribute("fen")
+		if typeof(fenAttr) == "string" and string.match(fenAttr, FEN_PATTERN) then
 			return fenAttr
+		end
+
+		if obj:IsA("StringValue") and string.match(obj.Value, FEN_PATTERN) then
+			return obj.Value
 		end
 	end
 
 	return nil
 end
 
----Create the minimal overlay UI in gethui or CoreGui.
-local function createOverlay()
-	local parent = (gethui and gethui()) or coreGui
-	local existing = parent:FindFirstChild("RoChessHelperUI")
-	if existing then
-		existing:Destroy()
+---Build and initialize the Rayfield interface.
+local function createRayfieldUI()
+	local Rayfield = loadRayfield()
+	RoChessHelper.rayfield = Rayfield
+
+	local Window = Rayfield:CreateWindow({
+		Name = "RoChess! Engine Helper",
+		LoadingTitle = "RoChess! Helper",
+		LoadingSubtitle = "Powered by Stockfish",
+		ConfigurationSaving = {
+			Enabled = false,
+		},
+		KeySystem = false,
+	})
+
+	local mainTab = Window:CreateTab("Engine", 4483362458)
+
+	local statusParagraph = mainTab:CreateParagraph({
+		Title = "Hasil Analisa",
+		Content = "Best Move: --\nEvaluasi: --\nFEN: --",
+	})
+
+	local function updateResult(fen, bestMove, eval)
+		RoChessHelper.lastBestMove = bestMove or ""
+		RoChessHelper.lastEval = tostring(eval or "?")
+		statusParagraph:Set({
+			Title = "Hasil Analisa",
+			Content = string.format(
+				"Best Move: %s\nEvaluasi: %s\nFEN: %s",
+				tostring(bestMove or "--"),
+				tostring(eval or "--"),
+				fen
+			),
+		})
 	end
 
-	local screenGui = Instance.new("ScreenGui")
-	screenGui.Name = "RoChessHelperUI"
-	screenGui.ResetOnSpawn = false
-	screenGui.Parent = parent
-
-	local frame = Instance.new("Frame")
-	frame.Size = UDim2.new(0, 260, 0, 110)
-	frame.Position = UDim2.new(0, 20, 0, 200)
-	frame.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
-	frame.BorderSizePixel = 0
-	frame.Active = true
-	frame.Draggable = true
-	frame.Parent = screenGui
-
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = frame
-
-	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, -16, 0, 24)
-	title.Position = UDim2.new(0, 8, 0, 6)
-	title.BackgroundTransparency = 1
-	title.Text = "RoChess! Engine Helper"
-	title.TextColor3 = Color3.fromRGB(235, 235, 240)
-	title.TextSize = 14
-	title.Font = Enum.Font.GothamBold
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.Parent = frame
-
-	local fenBox = Instance.new("TextBox")
-	fenBox.Size = UDim2.new(1, -16, 0, 28)
-	fenBox.Position = UDim2.new(0, 8, 0, 34)
-	fenBox.BackgroundColor3 = Color3.fromRGB(36, 36, 42)
-	fenBox.TextColor3 = Color3.fromRGB(220, 220, 225)
-	fenBox.PlaceholderText = "Paste FEN or auto-detect..."
-	fenBox.Text = ""
-	fenBox.TextSize = 12
-	fenBox.Font = Enum.Font.Gotham
-	fenBox.ClearTextOnFocus = false
-	fenBox.Parent = frame
-
-	local resultLabel = Instance.new("TextLabel")
-	resultLabel.Size = UDim2.new(1, -16, 0, 28)
-	resultLabel.Position = UDim2.new(0, 8, 0, 70)
-	resultLabel.BackgroundTransparency = 1
-	resultLabel.Text = "Best Move: --"
-	resultLabel.TextColor3 = Color3.fromRGB(120, 220, 150)
-	resultLabel.TextSize = 13
-	resultLabel.Font = Enum.Font.GothamSemibold
-	resultLabel.TextXAlignment = Enum.TextXAlignment.Left
-	resultLabel.Parent = frame
-
-	fenBox.FocusLost:Connect(function(enterPressed)
-		if not enterPressed or fenBox.Text == "" then
+	local function analyzeFen(fen)
+		if not fen or fen == "" then
 			return
 		end
-		resultLabel.Text = "Calculating..."
-		local bestMove, eval = getBestMove(fenBox.Text)
+
+		statusParagraph:Set({
+			Title = "Hasil Analisa",
+			Content = "Menghitung langkah terbaik...",
+		})
+
+		local bestMove, eval = getBestMove(fen)
 		if bestMove then
-			resultLabel.Text = string.format("Best: %s (Eval: %s)", bestMove, tostring(eval or "?"))
+			updateResult(fen, bestMove, eval)
 		else
-			resultLabel.Text = "Error: " .. tostring(eval)
+			statusParagraph:Set({
+				Title = "Error",
+				Content = tostring(eval),
+			})
 		end
-	end)
+	end
+
+	mainTab:CreateToggle({
+		Name = "Auto-Detect FEN",
+		CurrentValue = RoChessHelper.autoDetect,
+		Flag = "AutoDetectFEN",
+		Callback = function(value)
+			RoChessHelper.autoDetect = value
+		end,
+	})
+
+	mainTab:CreateSlider({
+		Name = "Stockfish Depth",
+		Range = { 5, 18 },
+		Increment = 1,
+		Suffix = " depth",
+		CurrentValue = RoChessHelper.depth,
+		Flag = "EngineDepth",
+		Callback = function(value)
+			RoChessHelper.depth = value
+		end,
+	})
+
+	mainTab:CreateInput({
+		Name = "Manual FEN",
+		PlaceholderText = "Paste FEN di sini lalu Enter...",
+		RemoveTextAfterFocusLost = false,
+		Callback = function(text)
+			if text ~= "" then
+				RoChessHelper.lastFen = text
+				analyzeFen(text)
+			end
+		end,
+	})
+
+	mainTab:CreateButton({
+		Name = "Analisa Ulang FEN Terakhir",
+		Callback = function()
+			if RoChessHelper.lastFen ~= "" then
+				analyzeFen(RoChessHelper.lastFen)
+			end
+		end,
+	})
+
+	mainTab:CreateButton({
+		Name = "Copy Best Move",
+		Callback = function()
+			if setclipboard and RoChessHelper.lastBestMove ~= "" then
+				setclipboard(RoChessHelper.lastBestMove)
+				Rayfield:Notify({
+					Title = "Disalin",
+					Content = "Best Move: " .. RoChessHelper.lastBestMove,
+					Duration = 3,
+				})
+			end
+		end,
+	})
 
 	-- Poll for auto-detected FEN changes.
 	task.spawn(function()
-		while screenGui.Parent and RoChessHelper.enabled do
-			local detectedFen = findBoardFen()
-			if detectedFen and detectedFen ~= RoChessHelper.lastFen then
-				RoChessHelper.lastFen = detectedFen
-				fenBox.Text = detectedFen
-				local bestMove, eval = getBestMove(detectedFen)
-				if bestMove then
-					resultLabel.Text = string.format("Best: %s (Eval: %s)", bestMove, tostring(eval or "?"))
+		while RoChessHelper.enabled do
+			if RoChessHelper.autoDetect then
+				local detectedFen = findBoardFen()
+				if detectedFen and detectedFen ~= RoChessHelper.lastFen then
+					RoChessHelper.lastFen = detectedFen
+					analyzeFen(detectedFen)
 				end
 			end
-			task.wait(0.75)
+			task.wait(RoChessHelper.pollInterval)
 		end
 	end)
 end
@@ -160,9 +227,13 @@ end
 local function initializeScript()
 	if shared.RoChessHelper then
 		shared.RoChessHelper.enabled = false
+		if shared.RoChessHelper.rayfield and shared.RoChessHelper.rayfield.Destroy then
+			pcall(shared.RoChessHelper.rayfield.Destroy, shared.RoChessHelper.rayfield)
+		end
 	end
+
 	shared.RoChessHelper = RoChessHelper
-	createOverlay()
+	createRayfieldUI()
 end
 
 ---Error handler for initialization.
