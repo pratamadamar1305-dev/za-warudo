@@ -49,7 +49,12 @@ end
 ---@return boolean
 local function isMatchingSquare(obj, lowerName)
 	local nameLower = string.lower(obj.Name)
-	if nameLower == lowerName then
+	if nameLower == lowerName
+		or nameLower == ("square_" .. lowerName)
+		or nameLower == ("tile_" .. lowerName)
+		or nameLower == (lowerName .. "_tile")
+		or nameLower == (lowerName .. "_square")
+	then
 		return true
 	end
 
@@ -61,14 +66,14 @@ local function isMatchingSquare(obj, lowerName)
 	return false
 end
 
----Highlight a 3D BasePart or 2D GuiObject square in blue.
+---Highlight a 3D BasePart/Model or 2D GuiObject square in blue.
 ---@param squareName string
 local function highlightSquare(squareName)
 	local lowerName = string.lower(squareName)
 
 	-- Highlight 3D board tiles in workspace.
 	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") and isMatchingSquare(obj, lowerName) then
+		if (obj:IsA("BasePart") or obj:IsA("Model")) and isMatchingSquare(obj, lowerName) then
 			local box = Instance.new("SelectionBox")
 			box.Name = "RoChessBlueBox"
 			box.Color3 = BLUE_OUTLINE_COLOR
