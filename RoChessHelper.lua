@@ -28,13 +28,19 @@ local FEN_PATTERN = "^[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[
 -- Services.
 local playersService = game:GetService("Players")
 local httpService = game:GetService("HttpService")
+local replicatedStorage = game:GetService("ReplicatedStorage")
 
 local localPlayer = playersService.LocalPlayer
+local httpRequest = request or http_request or (syn and syn.request)
 
 ---Load Rayfield UI library using the executor's request function.
 ---@return table
 local function loadRayfield()
-	local response = request({
+	if not httpRequest then
+		error("Executor tidak mendukung fungsi HTTP request.")
+	end
+
+	local response = httpRequest({
 		Url = RAYFIELD_URL,
 		Method = "GET",
 	})
@@ -53,15 +59,19 @@ end
 
 ---Query Stockfish API for the best move given a FEN string.
 ---@param fen string
----@return string?, string?
+---@return string?, any?, number?, string?
 local function getBestMove(fen)
+	if not httpRequest then
+		return nil, "HTTP request tidak tersedia"
+	end
+
 	local encodedFen = httpService:UrlEncode(fen)
-	local response = request({
+	local okReq, response = pcall(httpRequest, {
 		Url = string.format("%s?fen=%s&depth=%d", ENGINE_URL, encodedFen, RoChessHelper.depth),
 		Method = "GET",
 	})
 
-	if not response or not response.Success then
+	if not okReq or not response or not response.Success then
 		return nil, "HTTP request gagal"
 	end
 
@@ -91,15 +101,15 @@ local function formatEvaluation(eval, mate)
 	return tostring(eval or "?")
 end
 
----Attempt to locate a valid FEN string in PlayerGui attributes, StringValues, or TextLabels.
+---Scan a container for a valid FEN string in attributes or StringValues.
+---@param container Instance?
 ---@return string?
-local function findBoardFen()
-	local playerGui = localPlayer:FindFirstChildOfClass("PlayerGui")
-	if not playerGui then
+local function scanContainerForFen(container)
+	if not container then
 		return nil
 	end
 
-	for _, obj in ipairs(playerGui:GetDescendants()) do
+	for _, obj in ipairs(container:GetDescendants()) do
 		local fenAttr = obj:GetAttribute("FEN") or obj:GetAttribute("Fen") or obj:GetAttribute("fen")
 		if typeof(fenAttr) == "string" and string.match(fenAttr, FEN_PATTERN) then
 			return fenAttr
@@ -111,6 +121,13 @@ local function findBoardFen()
 	end
 
 	return nil
+end
+
+---Attempt to locate a valid FEN string in PlayerGui or ReplicatedStorage.
+---@return string?
+local function findBoardFen()
+	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
+	return scanContainerForFen(playerGui) or scanContainerForFen(replicatedStorage)
 end
 
 ---Build and initialize the Rayfield interface.
@@ -161,16 +178,19 @@ local function createRayfieldUI()
 	end
 
 	local function analyzeFen(fen)
-		if not fen or fen == "" then
+		if not fen or fen == "" or RoChessHelper.isAnalyzing then
 			return
 		end
 
+		RoChessHelper.isAnalyzing = true
 		statusParagraph:Set({
 			Title = "Rekomendasi Stockfish",
 			Content = "Menghitung langkah terbaik...",
 		})
 
 		local bestMove, eval, mate, continuation = getBestMove(fen)
+		RoChessHelper.isAnalyzing = false
+
 		if bestMove then
 			updateResult(fen, bestMove, eval, mate, continuation)
 		else
@@ -235,8 +255,9 @@ local function createRayfieldUI()
 	mainTab:CreateButton({
 		Name = "Copy Best Move",
 		Callback = function()
-			if setclipboard and RoChessHelper.lastBestMove ~= "" then
-				setclipboard(RoChessHelper.lastBestMove)
+			local clipFn = setclipboard or toclipboard
+			if clipFn and RoChessHelper.lastBestMove ~= "" then
+				pcall(clipFn, RoChessHelper.lastBestMove)
 				Rayfield:Notify({
 					Title = "Disalin",
 					Content = "Best Move: " .. RoChessHelper.lastBestMove,
