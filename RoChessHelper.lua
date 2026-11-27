@@ -12,18 +12,16 @@ getfenv().PP_SCRAMBLE_RE_NUM = function(...) return ... end
 
 local RoChessHelper = {
 	enabled = true,
-	autoDetect = true,
+	isAnalyzing = false,
 	depth = 14,
-	pollInterval = 0.75,
-	lastFen = "",
-	lastBestMove = "",
-	lastEval = "",
+	highlights = {},
 }
 
 -- Constants.
 local ENGINE_URL = "https://stockfish.online/api/s/v2.php"
 local RAYFIELD_URL = "https://sirius.menu/rayfield"
 local FEN_PATTERN = "^[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+/[rnbqkpRNBQKP1-8]+%s+[wb]%s+"
+local BLUE_HIGHLIGHT_COLOR = Color3.fromRGB(0, 120, 255)
 
 -- Services.
 local playersService = game:GetService("Players")
@@ -33,75 +31,71 @@ local replicatedStorage = game:GetService("ReplicatedStorage")
 local localPlayer = playersService.LocalPlayer
 local httpRequest = request or http_request or (syn and syn.request)
 
----Load Rayfield UI library using the executor's request function.
----@return table
-local function loadRayfield()
-	if not httpRequest then
-		error("Executor tidak mendukung fungsi HTTP request.")
+---Clear all active blue square highlights.
+local function clearHighlights()
+	for _, item in ipairs(RoChessHelper.highlights) do
+		if typeof(item) == "Instance" and item.Parent then
+			pcall(item.Destroy, item)
+		end
 	end
-
-	local response = httpRequest({
-		Url = RAYFIELD_URL,
-		Method = "GET",
-	})
-
-	if not response or not response.Success or not response.Body then
-		error("Gagal memuat Rayfield UI.")
-	end
-
-	local chunk, err = loadstring(response.Body)
-	if not chunk then
-		error("Gagal compile Rayfield: " .. tostring(err))
-	end
-
-	return chunk()
+	table.clear(RoChessHelper.highlights)
 end
 
----Query Stockfish API for the best move given a FEN string.
----@param fen string
----@return string?, any?, number?, string?
-local function getBestMove(fen)
-	if not httpRequest then
-		return nil, "HTTP request tidak tersedia"
+---Highlight a 3D BasePart or 2D GuiObject square in blue.
+---@param squareName string
+local function highlightSquare(squareName)
+	local lowerName = string.lower(squareName)
+	local upperName = string.upper(squareName)
+
+	-- Check 3D board tiles in workspace.
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") and (obj.Name == lowerName or obj.Name == upperName) then
+			local box = Instance.new("SelectionBox")
+			box.Name = "RoChessBlueHighlight"
+			box.Color3 = BLUE_HIGHLIGHT_COLOR
+			box.SurfaceColor3 = BLUE_HIGHLIGHT_COLOR
+			box.SurfaceTransparency = 0.45
+			box.LineThickness = 0.06
+			box.Adornee = obj
+			box.Parent = obj
+			table.insert(RoChessHelper.highlights, box)
+		end
 	end
 
-	local encodedFen = httpService:UrlEncode(fen)
-	local okReq, response = pcall(httpRequest, {
-		Url = string.format("%s?fen=%s&depth=%d", ENGINE_URL, encodedFen, RoChessHelper.depth),
-		Method = "GET",
-	})
-
-	if not okReq or not response or not response.Success then
-		return nil, "HTTP request gagal"
+	-- Check 2D board tiles in PlayerGui.
+	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
+	if playerGui then
+		for _, obj in ipairs(playerGui:GetDescendants()) do
+			if obj:IsA("GuiObject") and (obj.Name == lowerName or obj.Name == upperName) then
+				local overlay = Instance.new("Frame")
+				overlay.Name = "RoChessBlueHighlight"
+				overlay.Size = UDim2.fromScale(1, 1)
+				overlay.BackgroundColor3 = BLUE_HIGHLIGHT_COLOR
+				overlay.BackgroundTransparency = 0.45
+				overlay.BorderSizePixel = 0
+				overlay.ZIndex = obj.ZIndex + 10
+				overlay.Parent = obj
+				table.insert(RoChessHelper.highlights, overlay)
+			end
+		end
 	end
-
-	local ok, data = pcall(httpService.JSONDecode, httpService, response.Body)
-	if not ok or not data or not data.success then
-		return nil, "Response engine tidak valid"
-	end
-
-	return data.bestmove, data.evaluation, data.mate, data.continuation
 end
 
----Format evaluation or mate score into a readable Indonesian summary.
----@param eval number?
----@param mate number?
----@return string
-local function formatEvaluation(eval, mate)
-	if mate ~= nil then
-		local side = mate > 0 and "Putih" or "Hitam"
-		return string.format("Mate dalam %d (%s)", math.abs(mate), side)
+---Highlight both source and target squares of a UCI move (e.g. "e2e4") in blue.
+---@param uciMove string
+local function highlightMove(uciMove)
+	clearHighlights()
+	if not uciMove or #uciMove < 4 then
+		return
 	end
 
-	if typeof(eval) == "number" then
-		local side = eval > 0 and "Putih unggul" or (eval < 0 and "Hitam unggul" or "Seimbang")
-		return string.format("%+.2f (%s)", eval, side)
-	end
-
-	return tostring(eval or "?")
+	local fromSquare = string.sub(uciMove, 1, 2)
+	local toSquare = string.sub(uciMove, 3, 4)
+	highlightSquare(fromSquare)
+	highlightSquare(toSquare)
 end
 
----Scan a container for a valid FEN string in attributes or StringValues.
+---Scan an Instance container for a valid FEN string.
 ---@param container Instance?
 ---@return string?
 local function scanContainerForFen(container)
@@ -123,163 +117,121 @@ local function scanContainerForFen(container)
 	return nil
 end
 
----Attempt to locate a valid FEN string in PlayerGui or ReplicatedStorage.
+---Automatically locate the live board FEN via GC tables, PlayerGui, or ReplicatedStorage.
 ---@return string?
 local function findBoardFen()
+	if getgc then
+		for _, val in ipairs(getgc(true)) do
+			if typeof(val) == "table" then
+				local fen = rawget(val, "fen") or rawget(val, "FEN") or rawget(val, "Fen")
+				if typeof(fen) == "string" and string.match(fen, FEN_PATTERN) then
+					return fen
+				end
+			end
+		end
+	end
+
 	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
 	return scanContainerForFen(playerGui) or scanContainerForFen(replicatedStorage)
 end
 
----Build and initialize the Rayfield interface.
+---Query Stockfish API for the best move given a FEN string.
+---@param fen string
+---@return string?, string?
+local function getBestMove(fen)
+	if not httpRequest then
+		return nil, "HTTP request tidak tersedia"
+	end
+
+	local encodedFen = httpService:UrlEncode(fen)
+	local okReq, response = pcall(httpRequest, {
+		Url = string.format("%s?fen=%s&depth=%d", ENGINE_URL, encodedFen, RoChessHelper.depth),
+		Method = "GET",
+	})
+
+	if not okReq or not response or not response.Success then
+		return nil, "HTTP request gagal"
+	end
+
+	local okJson, data = pcall(httpService.JSONDecode, httpService, response.Body)
+	if not okJson or not data or not data.success then
+		return nil, "Response engine tidak valid"
+	end
+
+	return data.bestmove, nil
+end
+
+---Load Rayfield UI library using the executor's request function.
+---@return table
+local function loadRayfield()
+	if not httpRequest then
+		error("Executor tidak mendukung HTTP request.")
+	end
+
+	local response = httpRequest({
+		Url = RAYFIELD_URL,
+		Method = "GET",
+	})
+
+	if not response or not response.Success or not response.Body then
+		error("Gagal memuat Rayfield UI.")
+	end
+
+	local chunk, err = loadstring(response.Body)
+	if not chunk then
+		error("Gagal compile Rayfield: " .. tostring(err))
+	end
+
+	return chunk()
+end
+
+---Build and initialize the minimal Rayfield UI with only the Best Move button.
 local function createRayfieldUI()
 	local Rayfield = loadRayfield()
 	RoChessHelper.rayfield = Rayfield
 
 	local Window = Rayfield:CreateWindow({
-		Name = "RoChess! Engine Helper",
-		LoadingTitle = "RoChess! Helper",
-		LoadingSubtitle = "Powered by Stockfish",
+		Name = "RoChess! Best Move",
+		LoadingTitle = "RoChess!",
+		LoadingSubtitle = "Auto Stockfish",
 		ConfigurationSaving = {
 			Enabled = false,
 		},
 		KeySystem = false,
 	})
 
-	local mainTab = Window:CreateTab("Engine", 4483362458)
+	local mainTab = Window:CreateTab("Main", 4483362458)
 
-	local statusParagraph = mainTab:CreateParagraph({
-		Title = "Hasil Analisa",
-		Content = "Best Move: --\nEvaluasi: --\nFEN: --",
-	})
-
-	local function updateResult(fen, bestMove, eval, mate, continuation)
-		local evalText = formatEvaluation(eval, mate)
-		RoChessHelper.lastBestMove = bestMove or ""
-		RoChessHelper.lastEval = evalText
-
-		statusParagraph:Set({
-			Title = "Rekomendasi Stockfish",
-			Content = string.format(
-				"Best Move: %s\nEvaluasi: %s\nLanjutan: %s\nFEN: %s",
-				tostring(bestMove or "--"),
-				evalText,
-				tostring(continuation or "--"),
-				fen
-			),
-		})
-
-		if RoChessHelper.notifyOnMove and bestMove then
-			Rayfield:Notify({
-				Title = "Rekomendasi: " .. tostring(bestMove),
-				Content = evalText,
-				Duration = 3,
-			})
-		end
-	end
-
-	local function analyzeFen(fen)
-		if not fen or fen == "" or RoChessHelper.isAnalyzing then
-			return
-		end
-
-		RoChessHelper.isAnalyzing = true
-		statusParagraph:Set({
-			Title = "Rekomendasi Stockfish",
-			Content = "Menghitung langkah terbaik...",
-		})
-
-		local bestMove, eval, mate, continuation = getBestMove(fen)
-		RoChessHelper.isAnalyzing = false
-
-		if bestMove then
-			updateResult(fen, bestMove, eval, mate, continuation)
-		else
-			statusParagraph:Set({
-				Title = "Error",
-				Content = tostring(eval),
-			})
-		end
-	end
-
-	mainTab:CreateToggle({
-		Name = "Auto-Detect FEN",
-		CurrentValue = RoChessHelper.autoDetect,
-		Flag = "AutoDetectFEN",
-		Callback = function(value)
-			RoChessHelper.autoDetect = value
-		end,
-	})
-
-	mainTab:CreateToggle({
-		Name = "Notifikasi Best Move",
-		CurrentValue = RoChessHelper.notifyOnMove,
-		Flag = "NotifyBestMove",
-		Callback = function(value)
-			RoChessHelper.notifyOnMove = value
-		end,
-	})
-
-	mainTab:CreateSlider({
-		Name = "Stockfish Depth",
-		Range = { 5, 18 },
-		Increment = 1,
-		Suffix = " depth",
-		CurrentValue = RoChessHelper.depth,
-		Flag = "EngineDepth",
-		Callback = function(value)
-			RoChessHelper.depth = value
-		end,
-	})
-
-	mainTab:CreateInput({
-		Name = "Manual FEN",
-		PlaceholderText = "Paste FEN di sini lalu Enter...",
-		RemoveTextAfterFocusLost = false,
-		Callback = function(text)
-			if text ~= "" then
-				RoChessHelper.lastFen = text
-				analyzeFen(text)
-			end
-		end,
-	})
+	local statusLabel = mainTab:CreateLabel("Best Move: --")
 
 	mainTab:CreateButton({
-		Name = "Analisa Ulang FEN Terakhir",
+		Name = "Best Move",
 		Callback = function()
-			if RoChessHelper.lastFen ~= "" then
-				analyzeFen(RoChessHelper.lastFen)
+			if RoChessHelper.isAnalyzing then
+				return
+			end
+
+			RoChessHelper.isAnalyzing = true
+			statusLabel:Set("Best Move: Menghitung...")
+
+			local fen = findBoardFen()
+			if not fen then
+				RoChessHelper.isAnalyzing = false
+				statusLabel:Set("Best Move: FEN papan tidak ditemukan")
+				return
+			end
+
+			local bestMove, err = getBestMove(fen)
+			RoChessHelper.isAnalyzing = false
+
+			if bestMove then
+				statusLabel:Set("Best Move: " .. tostring(bestMove))
+				highlightMove(bestMove)
+			else
+				statusLabel:Set("Error: " .. tostring(err))
 			end
 		end,
 	})
-
-	mainTab:CreateButton({
-		Name = "Copy Best Move",
-		Callback = function()
-			local clipFn = setclipboard or toclipboard
-			if clipFn and RoChessHelper.lastBestMove ~= "" then
-				pcall(clipFn, RoChessHelper.lastBestMove)
-				Rayfield:Notify({
-					Title = "Disalin",
-					Content = "Best Move: " .. RoChessHelper.lastBestMove,
-					Duration = 3,
-				})
-			end
-		end,
-	})
-
-	-- Poll for auto-detected FEN changes.
-	task.spawn(function()
-		while RoChessHelper.enabled do
-			if RoChessHelper.autoDetect then
-				local detectedFen = findBoardFen()
-				if detectedFen and detectedFen ~= RoChessHelper.lastFen then
-					RoChessHelper.lastFen = detectedFen
-					analyzeFen(detectedFen)
-				end
-			end
-			task.wait(RoChessHelper.pollInterval)
-		end
-	end)
 end
 
 ---Main entry point.
@@ -291,6 +243,7 @@ local function initializeScript()
 		end
 	end
 
+	clearHighlights()
 	shared.RoChessHelper = RoChessHelper
 	createRayfieldUI()
 end
