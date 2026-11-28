@@ -29,6 +29,7 @@ local BLUE_OUTLINE_COLOR = Color3.fromRGB(80, 190, 255)
 local playersService = game:GetService("Players")
 local httpService = game:GetService("HttpService")
 local replicatedStorage = game:GetService("ReplicatedStorage")
+local coreGui = game:GetService("CoreGui")
 
 local localPlayer = playersService.LocalPlayer
 local httpRequest = request or http_request or (syn and syn.request)
@@ -184,6 +185,90 @@ local function highlightByBoardGeometry(fromSquare, toSquare)
 	spawnBlueMarker(squareToCFrame(toSquare), sqSize)
 end
 
+---Fallback: find the 2D chess board GuiObject in PlayerGui and draw blue overlays on top.
+---@param fromSquare string
+---@param toSquare string
+local function highlightByGuiBoardGeometry(fromSquare, toSquare)
+	local playerGui = localPlayer and localPlayer:FindFirstChildOfClass("PlayerGui")
+	if not playerGui then
+		return
+	end
+
+	local bestBoard = nil
+	local bestArea = 0
+
+	for _, obj in ipairs(playerGui:GetDescendants()) do
+		if obj:IsA("GuiObject") and obj.Visible then
+			local sx, sy = obj.AbsoluteSize.X, obj.AbsoluteSize.Y
+			if sx >= 200 and sy >= 200 and math.abs(sx - sy) <= 24 then
+				local area = sx * sy
+				if area > bestArea then
+					bestArea = area
+					bestBoard = obj
+				end
+			end
+		end
+	end
+
+	if not bestBoard then
+		return
+	end
+
+	-- Detect if board is flipped (Black at bottom: rank "8" near bottom or "1" near top).
+	local isFlipped = false
+	local boardMidY = bestBoard.AbsolutePosition.Y + bestBoard.AbsoluteSize.Y * 0.5
+	for _, child in ipairs(bestBoard:GetDescendants()) do
+		if child:IsA("TextLabel") and child.Visible then
+			if child.Text == "8" and child.AbsolutePosition.Y > boardMidY then
+				isFlipped = true
+				break
+			elseif child.Text == "1" and child.AbsolutePosition.Y < boardMidY then
+				isFlipped = true
+				break
+			end
+		end
+	end
+
+	local parentGui = (gethui and gethui()) or coreGui
+	local overlayGui = Instance.new("ScreenGui")
+	overlayGui.Name = "RoChessBlueOverlayGui"
+	overlayGui.DisplayOrder = 999999
+	overlayGui.IgnoreGuiInset = true
+	overlayGui.ResetOnSpawn = false
+	overlayGui.Parent = parentGui
+	table.insert(RoChessHelper.highlights, overlayGui)
+
+	local sqW = bestBoard.AbsoluteSize.X / 8
+	local sqH = bestBoard.AbsoluteSize.Y / 8
+	local baseX = bestBoard.AbsolutePosition.X
+	local baseY = bestBoard.AbsolutePosition.Y
+
+	local function drawSquare(sq)
+		local fileIdx = string.byte(string.lower(sq), 1) - 96 -- 1..8 (a..h)
+		local rankIdx = tonumber(string.sub(sq, 2, 2)) or 1 -- 1..8
+
+		local col = isFlipped and (8 - fileIdx) or (fileIdx - 1)
+		local row = isFlipped and (rankIdx - 1) or (8 - rankIdx)
+
+		local frame = Instance.new("Frame")
+		frame.Name = "RoChessBlueSquare_" .. sq
+		frame.Position = UDim2.fromOffset(baseX + col * sqW, baseY + row * sqH)
+		frame.Size = UDim2.fromOffset(sqW, sqH)
+		frame.BackgroundColor3 = BLUE_FILL_COLOR
+		frame.BackgroundTransparency = 0.45
+		frame.BorderSizePixel = 0
+		frame.Parent = overlayGui
+
+		local stroke = Instance.new("UIStroke")
+		stroke.Color = BLUE_OUTLINE_COLOR
+		stroke.Thickness = 3
+		stroke.Parent = frame
+	end
+
+	drawSquare(fromSquare)
+	drawSquare(toSquare)
+end
+
 ---Highlight both source and target squares of a UCI move (e.g. "e2e4") in blue.
 ---@param uciMove string
 local function highlightMove(uciMove)
@@ -196,6 +281,10 @@ local function highlightMove(uciMove)
 	local toSquare = string.sub(uciMove, 3, 4)
 	highlightSquare(fromSquare)
 	highlightSquare(toSquare)
+
+	if #RoChessHelper.highlights == 0 then
+		highlightByGuiBoardGeometry(fromSquare, toSquare)
+	end
 
 	if #RoChessHelper.highlights == 0 then
 		highlightByBoardGeometry(fromSquare, toSquare)
