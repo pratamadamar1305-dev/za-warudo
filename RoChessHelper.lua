@@ -3,12 +3,6 @@ if not shared then
 	return warn("No shared, no script.")
 end
 
--- Restrict execution to Delta executor only.
-local executorName = (identifyexecutor and select(1, identifyexecutor())) or ""
-if not string.find(string.lower(tostring(executorName)), "delta") then
-	return warn("Script ini khusus untuk executor Delta.")
-end
-
 -- Initialize Luraph globals if they do not exist.
 loadstring("getfenv().LPH_NO_VIRTUALIZE = function(...) return ... end")()
 
