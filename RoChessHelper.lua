@@ -229,6 +229,22 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 		end
 	end
 
+	local hasLayout = bestBoard:FindFirstChildOfClass("UIGridLayout") ~= nil
+		or bestBoard:FindFirstChildOfClass("UIListLayout") ~= nil
+	local targetParent = bestBoard
+	if hasLayout and bestBoard.Parent and bestBoard.Parent:IsA("GuiObject") then
+		local container = Instance.new("Frame")
+		container.Name = "RoChessBlueContainer"
+		container.AnchorPoint = bestBoard.AnchorPoint
+		container.Position = bestBoard.Position
+		container.Size = bestBoard.Size
+		container.BackgroundTransparency = 1
+		container.ZIndex = bestBoard.ZIndex + 50
+		container.Parent = bestBoard.Parent
+		table.insert(RoChessHelper.highlights, container)
+		targetParent = container
+	end
+
 	local function drawSquare(sq)
 		local fileIdx = string.byte(string.lower(sq), 1) - 96 -- 1..8 (a..h)
 		local rankIdx = tonumber(string.sub(sq, 2, 2)) or 1 -- 1..8
@@ -244,7 +260,7 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 		frame.BackgroundTransparency = 0.45
 		frame.BorderSizePixel = 0
 		frame.ZIndex = 999
-		frame.Parent = bestBoard
+		frame.Parent = targetParent
 
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = BLUE_OUTLINE_COLOR
