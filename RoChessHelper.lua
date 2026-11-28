@@ -200,7 +200,7 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 	for _, obj in ipairs(playerGui:GetDescendants()) do
 		if obj:IsA("GuiObject") and obj.Visible then
 			local sx, sy = obj.AbsoluteSize.X, obj.AbsoluteSize.Y
-			if sx >= 200 and sy >= 200 and math.abs(sx - sy) <= 24 then
+			if sx >= 180 and sy >= 180 and math.abs(sx - sy) <= 40 then
 				local area = sx * sy
 				if area > bestArea then
 					bestArea = area
@@ -230,15 +230,6 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 	end
 
 	local boardScreenGui = bestBoard:FindFirstAncestorOfClass("ScreenGui")
-	local parentGui = (gethui and gethui()) or coreGui
-	local overlayGui = Instance.new("ScreenGui")
-	overlayGui.Name = "RoChessBlueOverlayGui"
-	overlayGui.DisplayOrder = 999999
-	overlayGui.IgnoreGuiInset = true
-	overlayGui.ResetOnSpawn = false
-	overlayGui.Parent = parentGui
-	table.insert(RoChessHelper.highlights, overlayGui)
-
 	local inset = guiService:GetGuiInset()
 	local offsetY = (boardScreenGui and not boardScreenGui.IgnoreGuiInset) and inset.Y or 0
 	local sqW = bestBoard.AbsoluteSize.X / 8
@@ -252,10 +243,44 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 
 		local col = isFlipped and (8 - fileIdx) or (fileIdx - 1)
 		local row = isFlipped and (rankIdx - 1) or (8 - rankIdx)
+		local posX = baseX + col * sqW
+		local posY = baseY + row * sqH
+
+		if Drawing and Drawing.new then
+			local fill = Drawing.new("Square")
+			fill.Position = Vector2.new(posX, posY)
+			fill.Size = Vector2.new(sqW, sqH)
+			fill.Color = BLUE_FILL_COLOR
+			fill.Filled = true
+			fill.Transparency = 0.45
+			fill.ZIndex = 998
+			fill.Visible = true
+			table.insert(RoChessHelper.highlights, fill)
+
+			local border = Drawing.new("Square")
+			border.Position = Vector2.new(posX, posY)
+			border.Size = Vector2.new(sqW, sqH)
+			border.Color = BLUE_OUTLINE_COLOR
+			border.Filled = false
+			border.Thickness = 3
+			border.Transparency = 1
+			border.ZIndex = 999
+			border.Visible = true
+			table.insert(RoChessHelper.highlights, border)
+			return
+		end
+
+		local overlayGui = Instance.new("ScreenGui")
+		overlayGui.Name = "RoChessBlueOverlayGui"
+		overlayGui.DisplayOrder = 999999
+		overlayGui.IgnoreGuiInset = true
+		overlayGui.ResetOnSpawn = false
+		overlayGui.Parent = playerGui
+		table.insert(RoChessHelper.highlights, overlayGui)
 
 		local frame = Instance.new("Frame")
 		frame.Name = "RoChessBlueSquare_" .. sq
-		frame.Position = UDim2.fromOffset(baseX + col * sqW, baseY + row * sqH)
+		frame.Position = UDim2.fromOffset(posX, posY)
 		frame.Size = UDim2.fromOffset(sqW, sqH)
 		frame.BackgroundColor3 = BLUE_FILL_COLOR
 		frame.BackgroundTransparency = 0.45
