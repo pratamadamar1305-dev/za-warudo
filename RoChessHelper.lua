@@ -49,11 +49,20 @@ end
 ---@return boolean
 local function isMatchingSquare(obj, lowerName)
 	local nameLower = string.lower(obj.Name)
+	local fileNum = string.byte(lowerName, 1) - 96
+	local rankNum = string.sub(lowerName, 2, 2)
+	local coordComma = fileNum .. "," .. rankNum
+	local coordUnder = fileNum .. "_" .. rankNum
+	local coordDash = fileNum .. "-" .. rankNum
+
 	if nameLower == lowerName
 		or nameLower == ("square_" .. lowerName)
 		or nameLower == ("tile_" .. lowerName)
 		or nameLower == (lowerName .. "_tile")
 		or nameLower == (lowerName .. "_square")
+		or nameLower == coordComma
+		or nameLower == coordUnder
+		or nameLower == coordDash
 	then
 		return true
 	end
