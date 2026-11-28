@@ -229,11 +229,12 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 		end
 	end
 
+	local boardScreenGui = bestBoard:FindFirstAncestorOfClass("ScreenGui")
 	local parentGui = (gethui and gethui()) or coreGui
 	local overlayGui = Instance.new("ScreenGui")
 	overlayGui.Name = "RoChessBlueOverlayGui"
 	overlayGui.DisplayOrder = 999999
-	overlayGui.IgnoreGuiInset = true
+	overlayGui.IgnoreGuiInset = boardScreenGui and boardScreenGui.IgnoreGuiInset or false
 	overlayGui.ResetOnSpawn = false
 	overlayGui.Parent = parentGui
 	table.insert(RoChessHelper.highlights, overlayGui)
