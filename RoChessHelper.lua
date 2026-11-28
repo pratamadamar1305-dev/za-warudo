@@ -229,21 +229,6 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 		end
 	end
 
-	local boardScreenGui = bestBoard:FindFirstAncestorOfClass("ScreenGui")
-	local parentGui = (gethui and gethui()) or coreGui
-	local overlayGui = Instance.new("ScreenGui")
-	overlayGui.Name = "RoChessBlueOverlayGui"
-	overlayGui.DisplayOrder = 999999
-	overlayGui.IgnoreGuiInset = boardScreenGui and boardScreenGui.IgnoreGuiInset or false
-	overlayGui.ResetOnSpawn = false
-	overlayGui.Parent = parentGui
-	table.insert(RoChessHelper.highlights, overlayGui)
-
-	local sqW = bestBoard.AbsoluteSize.X / 8
-	local sqH = bestBoard.AbsoluteSize.Y / 8
-	local baseX = bestBoard.AbsolutePosition.X
-	local baseY = bestBoard.AbsolutePosition.Y
-
 	local function drawSquare(sq)
 		local fileIdx = string.byte(string.lower(sq), 1) - 96 -- 1..8 (a..h)
 		local rankIdx = tonumber(string.sub(sq, 2, 2)) or 1 -- 1..8
@@ -253,17 +238,20 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 
 		local frame = Instance.new("Frame")
 		frame.Name = "RoChessBlueSquare_" .. sq
-		frame.Position = UDim2.fromOffset(baseX + col * sqW, baseY + row * sqH)
-		frame.Size = UDim2.fromOffset(sqW, sqH)
+		frame.Position = UDim2.fromScale(col / 8, row / 8)
+		frame.Size = UDim2.fromScale(1 / 8, 1 / 8)
 		frame.BackgroundColor3 = BLUE_FILL_COLOR
 		frame.BackgroundTransparency = 0.45
 		frame.BorderSizePixel = 0
-		frame.Parent = overlayGui
+		frame.ZIndex = 999
+		frame.Parent = bestBoard
 
 		local stroke = Instance.new("UIStroke")
 		stroke.Color = BLUE_OUTLINE_COLOR
 		stroke.Thickness = 3
 		stroke.Parent = frame
+
+		table.insert(RoChessHelper.highlights, frame)
 	end
 
 	drawSquare(fromSquare)
