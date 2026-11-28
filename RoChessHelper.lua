@@ -444,8 +444,8 @@ local function createRayfieldUI()
 			RoChessHelper.isAnalyzing = true
 			statusLabel:Set("Best Move: Menghitung...")
 
-			local fen = findBoardFen()
-			if not fen then
+			local okFen, fen = pcall(findBoardFen)
+			if not okFen or not fen then
 				RoChessHelper.isAnalyzing = false
 				statusLabel:Set("Best Move: FEN tidak ditemukan")
 				return
@@ -456,7 +456,7 @@ local function createRayfieldUI()
 
 			if bestMove then
 				statusLabel:Set("Best Move: " .. bestMove)
-				highlightMove(bestMove)
+				pcall(highlightMove, bestMove)
 				Rayfield:Notify({
 					Title = "Best Move",
 					Content = bestMove,
