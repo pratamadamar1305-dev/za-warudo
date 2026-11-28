@@ -120,6 +120,70 @@ local function highlightSquare(squareName)
 	end
 end
 
+---Spawn a glowing blue 3D highlight part at a world CFrame.
+---@param cframe CFrame
+---@param size Vector3
+local function spawnBlueMarker(cframe, size)
+	local marker = Instance.new("Part")
+	marker.Name = "RoChessBlueMarker"
+	marker.Anchored = true
+	marker.CanCollide = false
+	marker.CanQuery = false
+	marker.CanTouch = false
+	marker.CastShadow = false
+	marker.Material = Enum.Material.Neon
+	marker.Color = BLUE_FILL_COLOR
+	marker.Transparency = 0.4
+	marker.Size = Vector3.new(size.X * 0.9, 0.12, size.Z * 0.9)
+	marker.CFrame = cframe + Vector3.new(0, 0.08, 0)
+	marker.Parent = workspace
+
+	local hl = Instance.new("Highlight")
+	hl.FillColor = BLUE_FILL_COLOR
+	hl.OutlineColor = BLUE_OUTLINE_COLOR
+	hl.FillTransparency = 0.35
+	hl.OutlineTransparency = 0
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Adornee = marker
+	hl.Parent = marker
+
+	table.insert(RoChessHelper.highlights, marker)
+end
+
+---Fallback: find the board BasePart/Model in workspace and place blue markers by 8x8 grid math.
+---@param fromSquare string
+---@param toSquare string
+local function highlightByBoardGeometry(fromSquare, toSquare)
+	local boardPart = nil
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			local n = string.lower(obj.Name)
+			if (n:find("board") or n:find("chess")) and obj.Size.X > 8 and obj.Size.Z > 8 then
+				boardPart = obj
+				break
+			end
+		end
+	end
+
+	if not boardPart then
+		return
+	end
+
+	local sqSize = Vector3.new(boardPart.Size.X / 8, 0.12, boardPart.Size.Z / 8)
+	local topY = boardPart.Size.Y * 0.5
+
+	local function squareToCFrame(sq)
+		local fileIdx = string.byte(string.lower(sq), 1) - 96 -- 1..8 (a..h)
+		local rankIdx = tonumber(string.sub(sq, 2, 2)) or 1 -- 1..8
+		local offsetX = (fileIdx - 4.5) * sqSize.X
+		local offsetZ = (4.5 - rankIdx) * sqSize.Z
+		return boardPart.CFrame * CFrame.new(offsetX, topY, offsetZ)
+	end
+
+	spawnBlueMarker(squareToCFrame(fromSquare), sqSize)
+	spawnBlueMarker(squareToCFrame(toSquare), sqSize)
+end
+
 ---Highlight both source and target squares of a UCI move (e.g. "e2e4") in blue.
 ---@param uciMove string
 local function highlightMove(uciMove)
@@ -132,6 +196,10 @@ local function highlightMove(uciMove)
 	local toSquare = string.sub(uciMove, 3, 4)
 	highlightSquare(fromSquare)
 	highlightSquare(toSquare)
+
+	if #RoChessHelper.highlights == 0 then
+		highlightByBoardGeometry(fromSquare, toSquare)
+	end
 end
 
 ---Scan an Instance container for a valid FEN string.
