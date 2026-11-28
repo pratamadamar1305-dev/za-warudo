@@ -295,6 +295,26 @@ local function highlightByGuiBoardGeometry(fromSquare, toSquare)
 
 	drawSquare(fromSquare)
 	drawSquare(toSquare)
+
+	if Drawing and Drawing.new then
+		local function squareCenter(sq)
+			local fileIdx = string.byte(string.lower(sq), 1) - 96
+			local rankIdx = tonumber(string.sub(sq, 2, 2)) or 1
+			local col = isFlipped and (8 - fileIdx) or (fileIdx - 1)
+			local row = isFlipped and (rankIdx - 1) or (8 - rankIdx)
+			return Vector2.new(baseX + (col + 0.5) * sqW, baseY + (row + 0.5) * sqH)
+		end
+
+		local line = Drawing.new("Line")
+		line.From = squareCenter(fromSquare)
+		line.To = squareCenter(toSquare)
+		line.Color = BLUE_OUTLINE_COLOR
+		line.Thickness = 4
+		line.Transparency = 0.85
+		line.ZIndex = 1000
+		line.Visible = true
+		table.insert(RoChessHelper.highlights, line)
+	end
 end
 
 ---Highlight both source and target squares of a UCI move (e.g. "e2e4") in blue.
@@ -307,11 +327,12 @@ local function highlightMove(uciMove)
 
 	local fromSquare = string.sub(uciMove, 1, 2)
 	local toSquare = string.sub(uciMove, 3, 4)
-	highlightSquare(fromSquare)
-	highlightSquare(toSquare)
+
+	highlightByGuiBoardGeometry(fromSquare, toSquare)
 
 	if #RoChessHelper.highlights == 0 then
-		highlightByGuiBoardGeometry(fromSquare, toSquare)
+		highlightSquare(fromSquare)
+		highlightSquare(toSquare)
 	end
 
 	if #RoChessHelper.highlights == 0 then
